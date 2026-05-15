@@ -180,3 +180,5 @@ cd server && npm run dev     # Express only
 | `93d566c` | `develop` / `feature/phase-1-scaffold` | Initial scaffold: client + server + design artifact + skills |
 | `b8567eb` | `feature/phase-2-core-pipeline` | PLAN.md workflow section + branch convention |
 | `2306ab3` | `feature/phase-2-core-pipeline` | Polish: simplify task table, retroactive phase-1 branch |
+| `f6d840c` | `feature/phase-2-core-pipeline` | Fix PLAN.md: commits table, branch labels, phase-4 name |
+| `ca85e77` | `feature/phase-2-core-pipeline` | Adopt `feature/` branch naming convention |
