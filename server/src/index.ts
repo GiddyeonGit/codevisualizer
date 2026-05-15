@@ -55,9 +55,14 @@ app.post("/api/parse", upload.array("files"), (req, res) => {
       parserOptions,
     });
 
-    const analyzed = analyzeGraph(result.nodes, result.edges);
+    const health = analyzeGraph(result.nodes, result.edges);
 
-    res.json(analyzed);
+    res.json({
+      nodes: result.nodes,
+      edges: result.edges,
+      projectRoot,
+      health,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     res.status(500).json({ error: message });
