@@ -54,8 +54,8 @@ parallel theme branches.
 | Branch | Phase | Status |
 |--------|-------|--------|
 | `feature/phase-1-scaffold` | Scaffold | ✅ Complete (committed to `develop`) |
-| `feature/phase-2-core-pipeline` | Core Pipeline | ⬅️ Active |
-| `feature/phase-3-visualization-interaction` | Visualization & Interaction | 🔜 |
+| `feature/phase-2-core-pipeline` | Core Pipeline | ✅ Complete (merged to `develop`) |
+| `feature/phase-3-visualization-interaction` | Visualization & Interaction | ⬅️ Next |
 | `feature/phase-4-architectural-overlay` | Architectural Overlay | 🔜 |
 | `feature/phase-5-refinement` | Refinement | 🔜 |
 
@@ -187,4 +187,5 @@ cd server && npm run dev     # Express only
 | `b8567eb` | `feature/phase-2-core-pipeline` | PLAN.md workflow section + branch convention |
 | `2306ab3` | `feature/phase-2-core-pipeline` | Polish: simplify task table, retroactive phase-1 branch |
 | `f6d840c` | `feature/phase-2-core-pipeline` | Fix PLAN.md: commits table, branch labels, phase-4 name |
+| `ac0c9c9` | `develop` (from `feature/phase-2-core-pipeline`) | **Phase 2: Core Pipeline** — TS parser, DropZone, 3D/2D graphs, wiring, 27 tests |
 | `ca85e77` | `feature/phase-2-core-pipeline` | Adopt `feature/` branch naming convention |
