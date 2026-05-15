@@ -85,14 +85,14 @@ This keeps PLAN.md as the single source of truth for "what's done, what's next."
 
 ### Phase 2: Core Pipeline ⬅️ (Next — in priority order)
 
-| # | Task | Files | Depends on |
-|---|------|-------|------------|
-| 1 | **TypeScript parser** — extract imports, classes, interfaces, functions from real TS files using TS compiler API | `server/src/parsers/typescript.ts` | — |
-| 2 | **DropZone** — File System Access API to read dropped folders, send to backend | `client/src/features/drop-zone/` | — |
-| 3 | **3D graph** — R3F canvas with sphere nodes, edge lines, OrbitControls, zoom-to-fit | `client/src/features/graph-3d/` | — |
-| 4 | **2D graph** — D3 force simulation rendering | `client/src/features/graph-2d/` | — |
-| 5 | **Client → server wiring** — DropZone → POST /api/parse → render result | `client/src/shared/api/`, `server/src/index.ts` | 1, 2, 3, 4 |
-| 6 | **Testing setup** — vitest (client), jest (server) | config files | — |
+| # | Task | Key files |
+|---|------|-----------|
+| 1 | **TypeScript parser** — extract imports, classes, interfaces, functions via TS compiler API | `server/src/parsers/typescript.ts` |
+| 2 | **DropZone** — File System Access API to read dropped folders | `client/src/features/drop-zone/` |
+| 3 | **3D graph** — R3F canvas with sphere nodes, edges, OrbitControls | `client/src/features/graph-3d/` |
+| 4 | **2D graph** — D3 force simulation rendering | `client/src/features/graph-2d/` |
+| 5 | **Client → server wiring** — DropZone → POST /api/parse → render result (depends on 1-4) | `client/src/shared/api/`, `server/src/index.ts` |
+| 6 | **Testing setup** — vitest (client), jest (server) | Config files |
 
 ### Phase 3: Visualization & Interaction
 
