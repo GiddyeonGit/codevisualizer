@@ -1,0 +1,89 @@
+Task: Detail panel enhancements
+Week: 2 (Phase 3)
+Files affected: UPDATE client/src/features/details/index.tsx
+
+---
+
+Context:
+DetailPanel currently shows node label, kind badge, metrics (lines, methodCount, dependencyCount, exportCount, inheritanceDepth), and children list. The architecture design specifies adding imports/exports view, health warnings, and code preview.
+
+## Import/Export lists
+
+When a node is selected, show its imports and exports:
+
+- Imports: Find all edges where sourceId === selectedNodeId and kind === 'import'.
+  - For each import edge, find the target node and display its label and kind.
+  - Section header: "Imports ({count})" — if 0, show "No imports".
+  - List items: icon (based on kind) + label. Clickable: on click, store.selectNode(targetId).
+  - If the edge is not accessible (isAccessible === false), show a lock icon or strikethrough style.
+
+- Exports: If node.childIds exists and has entries, display them.
+  - In the current data model, only file nodes have childIds (their contained declarations). Non-file nodes have empty childIds.
+  - For each childId, look up the node in graphData.nodes and display its label and kind.
+  - Section header: "Exports ({count})" — if 0, show "No exports".
+  - List items: same style as imports.
+
+Edge case: node with no childIds or childIds array empty -- show "No exports" section header without list.
+
+## Health warnings
+
+If the node has metrics that indicate potential problems, show warnings:
+
+- Lines > 300: Warning "Large file ({lines} lines) — consider refactoring."
+- Method count > 15: Warning "{methodCount} methods — may indicate low cohesion."
+- Inheritance depth > 3: Warning "Deep inheritance chain (depth {inheritanceDepth})."
+- Dependencies (edges from this node where kind='import') count > 10: Warning "High dependency count ({count} deps)."
+- hasErrors === true: Warning "Parse errors detected — data may be incomplete."
+
+Display warnings as a list of small red/amber pill badges below metrics. Each warning has:
+- Icon: ⚠️
+- Text: the warning message.
+- Background: rgba(251, 191, 36, 0.15) for warnings, rgba(239, 68, 68, 0.15) for parse errors.
+
+## Code preview
+
+If the node has a filePath that maps to available content (we may not have content in memory), show a code preview placeholder:
+
+- Section header: "Code Preview"
+- If the node represents a file: show "📄 {filePath}" as a clickable heading.
+- Below: a small code block area (max 6 lines, monospace font, dark bg) showing the node declaration.
+  - Extract the declaration text from the node label and kind.
+  - For class: "class {label} { ... }"
+  - For interface: "interface {label} { ... }"
+  - For function: "function {label}(...) { ... }"
+  - For variable: "const {label} = ..."
+  - For enum: "enum {label} { ... }"
+  - For type-alias: "type {label} = ..."
+  - For file: show the project-relative file path instead.
+
+Implementation: Since we don't have source file content on the client, generate a synthetic declaration line based on the node's kind and label. This is a UX placeholder for a future "open in editor" feature.
+
+## Layout changes
+
+The panel should:
+- Scroll vertically if content exceeds max height (overflow-y: auto).
+- Sections separated by thin dividers (border-top: 1px solid var(--color-border)).
+- Each section has a small header (font-size: 11px, text-transform: uppercase, letter-spacing: 0.5px, color: var(--color-text-secondary)).
+- Warnings section appears first (if any), then metrics, then imports/exports, then code preview, then children.
+
+Existing content:
+- Kind badge stays at the top.
+- Metrics stays as-is but reformatted to use DetailRow component (which already exists).
+- Children list stays as-is but moves to bottom.
+
+Style updates:
+- Use CSS custom properties for colors: var(--color-bg), var(--color-surface), var(--color-text), var(--color-border), etc.
+- Panel width: 320px, max-height: 70vh.
+- Border-radius: 12px.
+- Backdrop: blur(12px).
+
+Existing imports in DetailPanel:
+- Currently imports GraphNode, GraphData from '@/shared/api/types'.
+- Add import for useInteractionStore from '@/entities/interaction-store' for selectNode action.
+
+Constraints:
+- All new sections collapse gracefully when there is no relevant data (empty array, null, zero).
+- Warnings use the existing metrics data — no server changes needed.
+- The synthetic code preview is a placeholder — clearly visually distinct from actual code (gray italic, no syntax highlighting).
+
+Output ONLY the code. No fences.

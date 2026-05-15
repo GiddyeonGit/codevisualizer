@@ -1,17 +1,102 @@
-import type { GraphNode, GraphData } from "@/shared/api/types";
+import { useInteractionStore } from "@/entities/interaction-store";
+import type { GraphNode } from "@/shared/api/types";
 
-interface DetailPanelProps {
-  data?: GraphData;
-  selectedNodeId?: string | null;
-  onNodeSelect?: (nodeId: string | null) => void;
+function getKindColor(kind: string): string {
+  const colors: Record<string, string> = {
+    file: "#60a5fa",
+    class: "#34d399",
+    interface: "#f472b6",
+    function: "#fbbf24",
+    variable: "#a78bfa",
+    enum: "#fb923c",
+    "type-alias": "#2dd4bf",
+  };
+  return colors[kind] || "#94a3b8";
 }
 
-export function DetailPanel({ data, selectedNodeId, onNodeSelect }: DetailPanelProps) {
-  const selectedNode = selectedNodeId ? data?.nodes.find((n) => n.id === selectedNodeId) : null;
+function DetailRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        padding: "4px 0",
+        fontSize: "12px",
+      }}
+    >
+      <span style={{ color: "var(--color-text-secondary, #64748b)" }}>{label}</span>
+      <span style={{ color: "var(--color-text, #e2e8f0)" }}>{value}</span>
+    </div>
+  );
+}
 
-  const handleClose = () => {
-    onNodeSelect?.(null);
-  };
+export function DetailPanel() {
+  const graphData = useInteractionStore((s) => s.graphData);
+  const selectedNodeId = useInteractionStore((s) => s.selectedNodeId);
+  const selectNode = useInteractionStore((s) => s.selectNode);
+
+  const node = graphData?.nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  if (!node) return null;
+
+  // Find imports for this node
+  const importEdges = graphData?.edges.filter(
+    (e) => e.sourceId === node.id && e.kind === "import",
+  ) ?? [];
+  const importNodes = importEdges
+    .map((e) => graphData?.nodes.find((n) => n.id === e.targetId))
+    .filter((n): n is GraphNode => !!n);
+
+  // Find exports (childIds)
+  const exportNodes = (node.childIds ?? [])
+    .map((childId) => graphData?.nodes.find((n) => n.id === childId))
+    .filter((n): n is GraphNode => !!n);
+
+  // Health warnings
+  const warnings: string[] = [];
+  const metrics = node.metrics;
+  if (metrics) {
+    if (metrics.lines && metrics.lines > 300)
+      warnings.push(
+        `Large file (${metrics.lines} lines) -- consider refactoring.`,
+      );
+    if (metrics.methodCount && metrics.methodCount > 15)
+      warnings.push(
+        `${metrics.methodCount} methods -- may indicate low cohesion.`,
+      );
+    if (metrics.inheritanceDepth && metrics.inheritanceDepth > 3)
+      warnings.push(
+        `Deep inheritance chain (depth ${metrics.inheritanceDepth}).`,
+      );
+    if (metrics.dependencyCount && metrics.dependencyCount > 10)
+      warnings.push(
+        `High dependency count (${metrics.dependencyCount} deps).`,
+      );
+    if (metrics.hasErrors)
+      warnings.push("Parse errors detected -- data may be incomplete.");
+  }
+
+  // Synthetic code preview
+  const codePreview = (() => {
+    switch (node.kind) {
+      case "class":
+        return `class ${node.label} { ... }`;
+      case "interface":
+        return `interface ${node.label} { ... }`;
+      case "function":
+        return `function ${node.label}(...) { ... }`;
+      case "variable":
+        return `const ${node.label} = ...`;
+      case "enum":
+        return `enum ${node.label} { ... }`;
+      case "type-alias":
+        return `type ${node.label} = ...`;
+      case "file":
+        return node.filePath || node.label;
+      default:
+        return `// ${node.label}`;
+    }
+  })();
 
   return (
     <div
@@ -19,139 +104,320 @@ export function DetailPanel({ data, selectedNodeId, onNodeSelect }: DetailPanelP
         position: "absolute",
         bottom: "16px",
         right: "16px",
-        width: "280px",
-        maxHeight: "360px",
-        background: "rgba(15,15,19,0.96)",
-        border: "1px solid #334155",
-        borderRadius: "10px",
-        padding: "14px",
-        fontFamily: "system-ui, sans-serif",
-        color: "#e2e8f0",
-        fontSize: "13px",
+        width: "320px",
+        maxHeight: "70vh",
         overflowY: "auto",
-        backdropFilter: "blur(8px)",
-        display: selectedNodeId && selectedNode ? "block" : "none",
+        background: "var(--color-surface, #1a1a23)",
+        border: "1px solid var(--color-border, #2a2a3a)",
+        borderRadius: "12px",
+        padding: "16px",
+        fontFamily: "system-ui, sans-serif",
+        color: "var(--color-text, #e2e8f0)",
+        backdropFilter: "blur(12px)",
+        zIndex: 30,
       }}
     >
-      {selectedNode && (
-        <>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "12px",
+        }}
+      >
+        <div style={{ fontSize: "16px", fontWeight: 600 }}>{node.label}</div>
+        <button
+          onClick={() => selectNode(null)}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "var(--color-text-secondary, #64748b)",
+            cursor: "pointer",
+            fontSize: "18px",
+            padding: "0 4px",
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Kind badge */}
+      <div
+        style={{
+          display: "inline-block",
+          padding: "2px 10px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: 600,
+          background: `${getKindColor(node.kind)}22`,
+          color: getKindColor(node.kind),
+          marginBottom: "12px",
+        }}
+      >
+        {node.kind}
+      </div>
+
+      {/* File path */}
+      {node.filePath && node.filePath !== node.label && (
+        <div
+          style={{
+            fontSize: "11px",
+            color: "var(--color-text-secondary, #64748b)",
+            marginBottom: "12px",
+            wordBreak: "break-all",
+          }}
+        >
+          📄 {node.filePath}
+        </div>
+      )}
+
+      {/* Warnings */}
+      {warnings.length > 0 && (
+        <div style={{ marginBottom: "12px" }}>
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "10px",
+              fontSize: "11px",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+              color: "var(--color-text-secondary, #64748b)",
+              marginBottom: "6px",
             }}
           >
-            <div style={{ fontSize: "15px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {selectedNode.label}
-            </div>
-            <button
-              onClick={handleClose}
+            Warnings
+          </div>
+          {warnings.map((w, i) => (
+            <div
+              key={i}
               style={{
-                background: "none",
-                border: "none",
-                color: "#94a3b8",
-                cursor: "pointer",
-                fontSize: "16px",
-                padding: "2px 6px",
-                borderRadius: "4px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "6px",
+                padding: "4px 8px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                background: w.includes("errors")
+                  ? "rgba(239, 68, 68, 0.15)"
+                  : "rgba(251, 191, 36, 0.15)",
+                color: w.includes("errors") ? "#ef4444" : "#fbbf24",
+                marginBottom: "4px",
               }}
             >
-              ✕
-            </button>
-          </div>
-          <div
-            style={{
-              display: "inline-block",
-              padding: "2px 8px",
-              borderRadius: "4px",
-              fontSize: "11px",
-              fontWeight: 500,
-              background: getKindColor(selectedNode.kind),
-              color: "#fff",
-              marginBottom: "10px",
-            }}
-          >
-            {selectedNode.kind}
-          </div>
-
-          {selectedNode.filePath && (
-            <DetailRow label="Path" value={selectedNode.filePath} />
-          )}
-
-          {selectedNode.metrics && (
-            <>
-              {selectedNode.metrics.lines !== undefined && (
-                <DetailRow label="Lines" value={`${selectedNode.metrics.lines}`} />
-              )}
-              {selectedNode.metrics.methodCount !== undefined && (
-                <DetailRow label="Methods" value={`${selectedNode.metrics.methodCount}`} />
-              )}
-              {selectedNode.metrics.dependencyCount !== undefined && (
-                <DetailRow label="Dependencies" value={`${selectedNode.metrics.dependencyCount}`} />
-              )}
-              {selectedNode.metrics.exportCount !== undefined && (
-                <DetailRow label="Exports" value={`${selectedNode.metrics.exportCount}`} />
-              )}
-              {selectedNode.metrics.inheritanceDepth !== undefined && selectedNode.metrics.inheritanceDepth > 0 && (
-                <DetailRow label="Inheritance depth" value={`${selectedNode.metrics.inheritanceDepth}`} />
-              )}
-              {selectedNode.metrics.hasErrors && (
-                <div style={{ color: "#ef4444", marginTop: "6px", fontSize: "12px" }}>
-                  ⚠ Parse errors detected
-                </div>
-              )}
-            </>
-          )}
-
-          {selectedNode.childIds && selectedNode.childIds.length > 0 && (
-            <div style={{ marginTop: "8px" }}>
-              <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>CHILDREN ({selectedNode.childIds.length})</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                {selectedNode.childIds.map((cid) => (
-                  <span
-                    key={cid}
-                    style={{
-                      padding: "1px 6px",
-                      background: "#1e293b",
-                      borderRadius: "3px",
-                      fontSize: "11px",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    {cid.split("~").pop()}
-                  </span>
-                ))}
-              </div>
+              <span>⚠️</span>
+              <span>{w}</span>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
+
+      {/* Divider */}
+      <div
+        style={{
+          borderTop: "1px solid var(--color-border, #2a2a3a)",
+          margin: "8px 0",
+        }}
+      />
+
+      {/* Metrics Section */}
+      <div style={{ marginBottom: "12px" }}>
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            color: "var(--color-text-secondary, #64748b)",
+            marginBottom: "6px",
+          }}
+        >
+          Metrics
+        </div>
+        {metrics && (
+          <>
+            <DetailRow label="Lines" value={metrics.lines ?? 0} />
+            <DetailRow label="Methods" value={metrics.methodCount ?? 0} />
+            <DetailRow label="Dependencies" value={metrics.dependencyCount ?? 0} />
+            <DetailRow label="Exports" value={metrics.exportCount ?? 0} />
+            <DetailRow label="Inheritance Depth" value={metrics.inheritanceDepth ?? 0} />
+          </>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div
+        style={{
+          borderTop: "1px solid var(--color-border, #2a2a3a)",
+          margin: "8px 0",
+        }}
+      />
+
+      {/* Imports */}
+      <div style={{ marginBottom: "12px" }}>
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            color: "var(--color-text-secondary, #64748b)",
+            marginBottom: "6px",
+          }}
+        >
+          Imports ({importNodes.length})
+        </div>
+        {importNodes.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary, #64748b)", fontStyle: "italic" }}>
+            No imports
+          </div>
+        ) : (
+          importNodes.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => selectNode(n.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 6px",
+                cursor: "pointer",
+                borderRadius: "4px",
+                fontSize: "12px",
+                color: "var(--color-text, #e2e8f0)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--color-border, #2a2a3a)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: getKindColor(n.kind),
+                  display: "inline-block",
+                }}
+              />
+              <span style={{ flex: 1 }}>{n.label}</span>
+              <span style={{ fontSize: "10px", color: "var(--color-text-secondary, #64748b)" }}>
+                {n.kind}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Divider */}
+      <div
+        style={{
+          borderTop: "1px solid var(--color-border, #2a2a3a)",
+          margin: "8px 0",
+        }}
+      />
+
+      {/* Exports */}
+      <div style={{ marginBottom: "12px" }}>
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            color: "var(--color-text-secondary, #64748b)",
+            marginBottom: "6px",
+          }}
+        >
+          Exports ({exportNodes.length})
+        </div>
+        {exportNodes.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary, #64748b)", fontStyle: "italic" }}>
+            No exports
+          </div>
+        ) : (
+          exportNodes.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => selectNode(n.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 6px",
+                cursor: "pointer",
+                borderRadius: "4px",
+                fontSize: "12px",
+                color: "var(--color-text, #e2e8f0)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--color-border, #2a2a3a)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <span
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: getKindColor(n.kind),
+                  display: "inline-block",
+                }}
+              />
+              <span style={{ flex: 1 }}>{n.label}</span>
+              <span style={{ fontSize: "10px", color: "var(--color-text-secondary, #64748b)" }}>
+                {n.kind}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Divider */}
+      <div
+        style={{
+          borderTop: "1px solid var(--color-border, #2a2a3a)",
+          margin: "8px 0",
+        }}
+      />
+
+      {/* Code Preview */}
+      <div>
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
+            color: "var(--color-text-secondary, #64748b)",
+            marginBottom: "6px",
+          }}
+        >
+          Code Preview
+        </div>
+        <pre
+          style={{
+            padding: "8px 12px",
+            background: "var(--color-bg, #0f0f13)",
+            border: "1px solid var(--color-border, #2a2a3a)",
+            borderRadius: "6px",
+            fontSize: "12px",
+            fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
+            color: "var(--color-text-secondary, #64748b)",
+            fontStyle: "italic",
+            overflow: "hidden",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            margin: 0,
+          }}
+        >
+          {codePreview}
+        </pre>
+      </div>
     </div>
   );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1e293b" }}>
-      <span style={{ color: "#64748b" }}>{label}</span>
-      <span style={{ color: "#e2e8f0", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function getKindColor(kind: string): string {
-  switch (kind) {
-    case "file": return "#3b82f6";
-    case "class": return "#8b5cf6";
-    case "interface": return "#06b6d4";
-    case "function": return "#10b981";
-    case "variable": return "#f59e0b";
-    case "enum": return "#ec4899";
-    case "type-alias": return "#14b8a6";
-    default: return "#64748b";
-  }
 }

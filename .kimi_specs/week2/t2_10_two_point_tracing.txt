@@ -1,0 +1,196 @@
+Task: Two-point tracing with client-side Dijkstra
+Week: 2 (Phase 3)
+Files affected: NEW client/src/shared/lib/tracer.ts, UPDATE client/src/features/graph-3d/index.tsx, UPDATE client/src/features/graph-2d/index.tsx, UPDATE client/src/features/search/index.tsx (trace mode indicator)
+
+---
+
+Context:
+The architecture design moves trace pathfinding from server to client because the server is stateless (graph data gone after parse response). The client already has full GraphData. Dijkstra on 1000 nodes/edges runs in ~5ms -- no server round-trip needed.
+
+## Tracer module (client/src/shared/lib/tracer.ts)
+
+--- EXISTING CONTENT (create file) ---
+
+import type { GraphData, GraphEdge } from '@/shared/api/types';
+
+export interface TraceResult {
+  nodeIds: string[];
+  edgeIds: string[];
+  totalAccessible: boolean;
+}
+
+export function runDijkstra(
+  graphData: GraphData,
+  sourceId: string,
+  targetId: string
+): TraceResult {
+  // 1. Edge case: source === target
+  //    Return path: [source], edges: [], totalAccessible: true
+
+  // 2. Build adjacency list from graphData.edges:
+  //    Map<string, Array<{ nodeId: string; edgeId: string; weight: number }>>
+  //    Weight = 1 if edge.isAccessible === true, weight = 10 if false
+
+  // 3. Dijkstra implementation:
+  //    - distances: Map<string, number> (default Infinity)
+  //    - previous: Map<string, { nodeId: string; edgeId: string } | null>
+  //    - unvisited: Set<string> of all node IDs
+  //    - distances.set(sourceId, 0)
+  //
+  //    While unvisited.size > 0:
+  //      current = min-distance node in unvisited
+  //      if current === targetId -> break (found shortest path)
+  //      if distances.get(current) === Infinity -> break (no path)
+  //      unvisited.delete(current)
+  //      for each neighbor of current:
+  //        alt = distances.get(current) + neighbor.weight
+  //        if alt < distances.get(neighbor.nodeId):
+  //          distances.set(neighbor.nodeId, alt)
+  //          previous.set(neighbor.nodeId, { nodeId: current, edgeId: neighbor.edgeId })
+
+  // 4. Reconstruct path:
+  //    If no path found (targetId not in previous) -> return empty path
+  //    Walk backwards from targetId through previous map:
+  //      nodePath: string[] = []
+  //      edgePath: string[] = []
+  //      while current !== sourceId:
+  //        nodePath.unshift(current)
+  //        prev = previous.get(current)
+  //        edgePath.unshift(prev.edgeId)
+  //        current = prev.nodeId
+  //      nodePath.unshift(sourceId)
+  //    Check totalAccessible: if any edge in edgePath has isAccessible === false -> false
+
+  // 5. Return { nodeIds: nodePath, edgeIds: edgePath, totalAccessible }
+}
+
+--- END EXISTING CONTENT ---
+
+Implementation note: Use a simple array-based priority queue (binary heap optional, not needed for <2000 nodes). A sorted `unvisited: string[]` is fine for this scale.
+
+## Store integration
+
+In interaction-store.ts, add a PRIVATE module-scoped function runTrace (not on the store interface, just a const in the same file):
+
+  runTrace(targetId: string): void
+    - Takes graphData and traceSourceId from store.get().
+    - If graphData or traceSourceId is null, return (no-op).
+    - If traceSourceId === targetId, set tracePath to a single-node path (source==target).
+    - Otherwise, call runDijkstra(graphData, traceSourceId, targetId).
+    - Set tracePath = result.
+    - If no path found (result.nodeIds is empty), traceSourceId stays set (user can Ctrl+click a different node to retry).
+
+Called from toggleTraceSource when traceSourceId is already set and user Ctrl+clicks a different node.
+
+## Graph3D: Trace visualization
+
+Use tracePath from store (useInteractionStore(s => s.tracePath)):
+- Read nodeIds and edgeIds from tracePath.
+
+Trace node highlight:
+- In SphereNode: if node.id is in tracePath.nodeIds:
+  - Set emissiveIntensity = 0.6 (double the selection intensity).
+  - Trace source node: color = '#fbbf24' (amber glow).
+  - Trace target node: color = '#34d399' (emerald glow).
+  - Intermediate nodes: color = '#60a5fa' with emissive (blue glow).
+
+Trace edge highlight:
+- In GraphEdges: if edge.id is in tracePath.edgeIds:
+  - opacity = 1.0 (vs 0.3 for non-trace edges).
+  - color = '#60a5fa' (bright blue).
+  - linewidth = 2 (via linewidth material or mesh-based thick line).
+
+Animated tracer dot in Graph3D:
+- A separate component or element inside GraphNodes that renders a small sphere (radius 0.3, emissive yellow #fbbf24).
+- Only rendered when tracePath exists (checked via store selector).
+- Uses useRef for progress (0 -> 1), increment per useFrame by 0.005.
+- On tracePath change (new trace started mid-animation): reset progress to 0 immediate.
+- Build a THREE.CatmullRomCurve3 from trace path node positions (look up from meshRefs).
+- travelPoint = curve.getPoint(progress).
+- Set the sphere's position to travelPoint each frame.
+- When progress >= 1, reset to 0 (continuous looping tracer).
+- Import CatmullRomCurve3 from 'three' (it's a core export -- no extra dependency).
+
+Animated tracer dot in Graph2D:
+- A small SVG circle (r=4, fill='#fbbf24') appended to the SVG group.
+- Use requestAnimationFrame ref for progress (same 0->1 cycle, increment 0.005 per frame).
+- Interpolate position: find the two consecutive trace nodes bracketing the current progress fraction. Use d3.interpolateObject for the lerp.
+- Only rendered when tracePath exists.
+- On tracePath change: reset progress to 0.
+
+Canvas empty-click: Calls store.deselectAll() which sets selectedNodeId = null (NOT clearTrace). The trace remains visible.
+
+## Graph2D: Trace visualization
+
+Trace node highlight:
+- Circles in trace node IDs: stroke = '#fbbf24', strokeWidth = 3.
+- Source node: fill = '#fbbf24' (amber).
+- Target node: fill = '#34d399' (emerald).
+- Intermediate: stroke = '#60a5fa', strokeWidth = 2.
+
+Trace edge highlight:
+- Lines in trace edge IDs: stroke = '#60a5fa', strokeWidth = 2.5.
+- Non-trace edges: strokeWidth = 1, opacity = 0.3.
+
+Animated tracer dot in 2D:
+- A small circle (r=4, fill='#fbbf24') that moves along the trace path.
+- Same progress mechanism as 3D (ref-based, increments per requestAnimationFrame).
+- Use d3.interpolate to interpolate between consecutive trace node positions.
+- Only render when tracePath exists.
+
+## Trace mode indicator in SearchPanel
+
+When traceSourceId is set (from store), show a visual indicator above the search input:
+- Text: "Trace mode active — Ctrl/Cmd+click a target node" or "Trace from [nodeLabel]"
+- Small badge: amber background, dark text.
+- Clickable "Cancel" button that calls store.clearTrace().
+
+## Keyboard: isTraceModifier helper
+
+Shared utility function (define locally or in shared/lib):
+
+```
+export function isTraceModifier(event: MouseEvent | PointerEvent | React.MouseEvent): boolean {
+  return event.metaKey || event.ctrlKey;
+}
+```
+
+- metaKey = Cmd on macOS.
+- ctrlKey = Ctrl on Windows/Linux.
+- Used by both Graph3D onClick and Graph2D click handler.
+
+Graph3D click handler:
+
+```
+onClick={(e) => {
+  e.stopPropagation();
+  if (e.nativeEvent.metaKey || e.nativeEvent.ctrlKey) {
+    e.nativeEvent.preventDefault();
+    store.toggleTraceSource(node.id);
+  } else {
+    store.selectNode(node.id);
+  }
+}}
+```
+
+Graph2D click handler:
+
+```
+circle.on('click', (event: MouseEvent, d: GraphNode) => {
+  if (event.metaKey || event.ctrlKey) {
+    event.preventDefault();
+    store.toggleTraceSource(d.id);
+  } else {
+    store.selectNode(d.id);
+  }
+});
+```
+
+Constraints:
+- Pure function runDijkstra is independently testable -- no React dependencies.
+- Tracer dot animation is purely imperative (refs + useFrame / requestAnimationFrame).
+- Trace visualization must persist across layout switches.
+- Trace visualization must persist across view mode switches (2D <-> 3D).
+- When a new project is dropped (store.reset()), clearTrace is called automatically.
+
+Output ONLY the code. No fences.

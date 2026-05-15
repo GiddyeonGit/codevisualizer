@@ -26,6 +26,7 @@ export interface GraphNode {
 
 /** A directed dependency edge between two nodes */
 export interface GraphEdge {
+  id: string;
   sourceId: string;
   targetId: string;
   /** The kind of dependency */
@@ -49,10 +50,10 @@ export type LayoutMode = "force-directed" | "spherical" | "concentric";
 export interface SearchResult {
   nodeId: string;
   label: string;
-  matchType: "name" | "path" | "type";
+  matchType: "label" | "path";
 }
 
-/** Path between two nodes found by trace */
+/** Path between two nodes */
 export interface TracePath {
   nodeIds: string[];
   edgeIds: string[];

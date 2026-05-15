@@ -1,0 +1,116 @@
+Task: Test specs for interaction store and tracer
+Week: 2 (Phase 3)
+Files affected: NEW client/src/__tests__/interaction-store.test.ts, NEW client/src/__tests__/tracer.test.ts
+
+---
+
+Context:
+Phase 3 introduces a Zustand interaction store and a client-side Dijkstra tracer module. Both are independently testable (no DOM, no React).
+
+## Tracer tests (client/src/__tests__/tracer.test.ts)
+
+Import: { runDijkstra } from '@/shared/lib/tracer', { GraphData } from '@/shared/api/types'.
+
+Fixtures (define inline -- small hand-crafted GraphData objects):
+
+Fixture 1: Two nodes, accessible edge
+- nodes: [{ id: 'a', label: 'A', kind: 'file', filePath: 'a.ts' }, { id: 'b', label: 'B', kind: 'file', filePath: 'b.ts' }]
+- edges: [{ id: 'e1', sourceId: 'a', targetId: 'b', kind: 'import', isAccessible: true }]
+- runDijkstra(graphData, 'a', 'b') => { nodeIds: ['a', 'b'], edgeIds: ['e1'], totalAccessible: true }
+
+Fixture 2: Three nodes, chain
+- a -> b -> c via accessible edges
+- runDijkstra(graphData, 'a', 'c') => { nodeIds: ['a', 'b', 'c'], edgeIds: ['e1', 'e2'], totalAccessible: true }
+
+Fixture 3: Disconnected nodes
+- a and b with no edge between them
+- runDijkstra(graphData, 'a', 'b') => { nodeIds: [], edgeIds: [], totalAccessible: false }
+
+Fixture 4: Source === target
+- runDijkstra(graphData, 'a', 'a') => { nodeIds: ['a'], edgeIds: [], totalAccessible: true }
+
+Fixture 5: Weighted path -- accessible preferred over inaccessible
+- a -> b (accessible, weight=1), a -> c (inaccessible, weight=10), c -> b (accessible, weight=1)
+- runDijkstra(graphData, 'a', 'b') should pick a->b directly (totalAccessible: true), not a->c->b
+
+Fixture 6: Only path is inaccessible
+- a -> b (inaccessible, weight=10)
+- runDijkstra(graphData, 'a', 'b') => { nodeIds: ['a', 'b'], edgeIds: ['e1'], totalAccessible: false }
+
+Test cases:
+1. "finds direct accessible path" -- Fixture 1.
+2. "finds chained path" -- Fixture 2.
+3. "returns empty when no path exists" -- Fixture 3.
+4. "handles source === target" -- Fixture 4.
+5. "prefers accessible over inaccessible" -- Fixture 5.
+6. "returns path with totalAccessible false when only inaccessible path exists" -- Fixture 6.
+7. "handles empty graph data" -- nodes: [], edges: [] -- returns empty path.
+8. "handles null/undefined gracefully" -- use try/catch, expect no throw.
+
+## Interaction store tests (client/src/__tests__/interaction-store.test.ts)
+
+Import: useInteractionStore from '@/entities/interaction-store'.
+
+Reset store between tests: useInteractionStore.setState(initialState).
+
+Test cases:
+
+1. "selectNode sets selectedNodeId":
+   - store.selectNode('node1')
+   - expect(store.getState().selectedNodeId).toBe('node1')
+
+2. "selectNode(null) clears selection":
+   - store.selectNode('node1'), then store.selectNode(null)
+   - expect(store.getState().selectedNodeId).toBeNull()
+
+3. "toggleTraceSource sets traceSourceId on first call":
+   - store.toggleTraceSource('node1')
+   - expect(store.getState().traceSourceId).toBe('node1')
+   - expect(store.getState().tracePath).toBeNull()
+
+4. "toggleTraceSource clears trace on same node":
+   - store.toggleTraceSource('node1'), then store.toggleTraceSource('node1')
+   - expect(store.getState().traceSourceId).toBeNull()
+
+5. "toggleTraceSource runs trace on different node":
+   - Set graphData with fixture 1 from tracer tests.
+   - store.toggleTraceSource('a'), then store.toggleTraceSource('b')
+   - expect(store.getState().tracePath).toEqual({ nodeIds: ['a', 'b'], edgeIds: ['e1'], totalAccessible: true })
+
+6. "clearTrace resets trace state":
+   - After setting traceSourceId and tracePath, clearTrace() resets both to null.
+
+7. "setViewMode updates viewMode":
+   - store.setViewMode('2d') -> viewMode === '2d'
+   - store.setViewMode('3d') -> viewMode === '3d'
+
+8. "setLayoutMode updates layoutMode":
+   - store.setLayoutMode('spherical') -> layoutMode === 'spherical'
+
+9. "toggleTheme flips theme":
+   - If theme was 'dark', after toggleTheme() it's 'light' (and vice versa).
+   - Check data-theme attribute on document.documentElement.
+
+10. "registerZoomToNode stores callback":
+    - const fn = vi.fn() (or jest.fn()).
+    - store.registerZoomToNode(fn)
+    - expect(store.getState().zoomToNode).toBe(fn)
+    - store.registerZoomToNode(null)
+    - expect(store.getState().zoomToNode).toBeNull()
+
+11. "reset clears all state":
+    - Set multiple state fields, call reset().
+    - All fields return to initial values (selectedNodeId null, traceSourceId null, etc.).
+    - Theme preference should persist (not reset).
+
+12. "setGraphData stores graph data":
+    - store.setGraphData(mockGraphData)
+    - expect(store.getState().graphData).toBe(mockGraphData)
+
+Constraints:
+- Use Vitest (already configured for server; add vitest config for client if needed or use the same vitest config with a different project).
+- If client vitest is not configured, add a simple client/vitest.config.ts that references the server config.
+- All tests must pass with zero type errors.
+- Store tests must call useInteractionStore.getState() for assertions outside React components.
+
+Output ONLY the code. No fences.

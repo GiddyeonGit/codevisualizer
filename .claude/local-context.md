@@ -13,100 +13,28 @@ Interactive code dependency visualizer with 3D/2D views. Drop a file/folder → 
 - Conducted interview-me session to design the TypeScript parser spec for Phase 2
 - 11 design decisions resolved + rapid round on 4 remaining areas
 
-### Session: Spec files written for TypeScript parser (2026-05-16)
+### Session: Phase 2 implementation + commit + merge (2026-05-16)
 
-**What was done:**
-- Wrote 3 spec files in `.kimi_specs/week1/` for Phase 2 Task 1 (TypeScript parser)
-- Spec format follows `.kimi_specs/format.txt` conventions (file-per-module, test spec, no em-dashes, plain text)
-- Updated PLAN.md to show task 1 design as complete
+**What was done — all 6 Phase 2 tasks completed, committed, and merged to `develop`:**
 
-**Spec files created:**
-| File | Coverage |
-|------|----------|
-| `t1_1_typescript_parser.txt` | TS Compiler API parser: AST visitor, entity extraction, import resolution, re-exports, graceful errors |
-| `t1_1_types_and_infrastructure.txt` | Supporting updates: types.ts, parsers/index.ts, builder.ts, server/src/index.ts |
-| `t1_1_test_typescript_parser.txt` | 12 test cases on 6 fixture projects -- imports, classes, enums, tsconfig paths, errors |
+1. **TypeScript parser** (`server/src/parsers/typescript.ts`) — TS Compiler API AST visitor extracting 7 entity kinds (file, class, interface, function, variable, enum, type-alias), tsconfig-aware import resolution (paths + baseUrl) with extension probing, re-export two-hop edges, graceful error handling with `hasErrors` flag
+2. **DropZone** (`client/src/features/drop-zone/index.tsx`) — File System Access API (`showDirectoryPicker`), drag-and-drop with `webkitGetAsEntry` recursive directory reader, `webkitdirectory` fallback, loading/error/dragging states
+3. **3D graph** (`client/src/features/graph-3d/index.tsx`) — R3F Canvas with sphere nodes (color/sized by kind for all 7 types), line edges (accessible/inaccessible styling), 3 layout modes (spherical, concentric, force-directed with spherical fallback), auto-rotate OrbitControls
+4. **2D graph** (`client/src/features/graph-2d/index.tsx`) — D3 force simulation with collision detection, circles colored by kind, labels on file nodes, zoom/pan via d3.zoom(), drag behavior
+5. **Client → server wiring** — `parseProject()` API client on frontend → `POST /api/parse` → `buildGraph()` + `analyzeGraph()` on backend; file extraction from multer uploads, tsconfig detection
+6. **Testing** (`server/vitest.config.ts`, `server/src/parsers/__tests__/`) — vitest with 27 tests across 6 fixture projects (simple-imports, classes/interfaces, re-exports, tsconfig aliases, enums/type-aliases, syntax errors, edge cases, metrics)
 
-**No new commits** -- spec files are text only, not source code.
-
-**TypeScript parser design decisions:**
-| # | Decision | Choice |
-|---|----------|--------|
-| 1 | Parser approach | TS Compiler API (ts.createSourceFile + AST visitor) |
-| 2 | Entity kinds | All: file, class, interface, function, variable, enum, type-alias |
-| 3 | Export scope | All declarations, nest non-exported under parent file |
-| 4 | External deps | Leaf marker nodes (external:package-name, isAccessible=false) |
-| 5 | Node metrics | Full: lines, methods, deps, inheritance depth, export count |
-| 6 | Import resolution | Full tsconfig-aware (reads tsconfig.json for paths/baseUrl) |
-| 7 | Output model | Add 'enum' and 'type-alias' to GraphNode.kind |
-| 8 | Entity filter | Default detailedNodes=true, toggle to structural-only |
-| 9 | Config API | Options param on parse(): ParserOptions { tsconfigPath?, detailedNodes? } |
-| 10 | Error handling | Graceful degradation: set hasErrors flag, emit partial data, continue |
-| 11 | Testing strategy | Real mini-project fixtures in test/fixtures/ts/ |
-| 12 | Re-exports | Two-hop edges: importer → barrel → source |
-| — | Rapid: tsconfig paths | Optional tsconfigPath, fallback to extension probing; cached per session |
-| — | Rapid: namespace merging | Initial: treat independently, deduplicate by ID in buildGraph |
-| — | Rapid: performance | Cap at 10K lines/file, advisory at 500+ files |
-| — | Rapid: /api/parse integration | Group files by extension, pass to buildGraph with recursive=false |
-
-### Build status
-- **Client:** `tsc --noEmit` — 0 errors
-- **Server:** `tsc --noEmit` — 0 errors
-- **Server tests:** 27/27 pass (`vitest`)
-- **Client tests:** Not configured (Phase 3)
-- **Smoke test:** 4 PASS / 3 SKIP — report at `data/smoke_report.md`
-
-## Project structure
-
-```
-codevisualizer/
-├── client/
-│   ├── src/
-│   │   ├── app/
-│   │   │   └── App.tsx                 # Main shell: DropZone → workspace toggle + panels
-│   │   ├── features/
-│   │   │   ├── drop-zone/index.tsx     # Drag/drop + FS Access API + recursive dir reader
-│   │   │   ├── graph-3d/index.tsx      # R3F: sphere nodes (color/size by kind), edges, 3 layouts, auto-rotate
-│   │   │   ├── graph-2d/index.tsx      # D3: force sim, circles, labels, zoom/pan, drag
-│   │   │   ├── search/index.tsx        # Real-time search with results list
-│   │   │   ├── overlay/index.tsx       # View/layout mode switcher
-│   │   │   └── details/index.tsx       # Detail panel: metrics, kind badge, children, close
-│   │   ├── entities/                   # Barrel
-│   │   └── shared/api/
-│   │       ├── types.ts                # GraphNode, GraphEdge, GraphData
-│   │       └── index.ts                # parseProject() API client
-│   ├── index.html
-│   ├── vite.config.ts                  # Proxy /api → localhost:3001
-│   └── package.json
-├── server/
-│   ├── src/
-│   │   ├── index.ts                    # Express app (port 3001), real parse endpoint
-│   │   ├── types.ts                    # Server types (enum, type-alias, reExports, hasErrors)
-│   │   ├── parsers/
-│   │   │   ├── index.ts                # Parser registry (TS + Python) with ParserOptions
-│   │   │   ├── typescript.ts           # TS Compiler API: AST visitor, 7 entity kinds, tsconfig-aware
-│   │   │   ├── __tests__/
-│   │   │   │   ├── typescript.test.ts  # 27 tests on 6 fixture projects
-│   │   │   │   └── fixtures/ts/        # 6 fixture projects (imports, classes, re-exports, etc.)
-│   │   │   └── python.ts              # Python parser stub
-│   │   └── graph/
-│   │       ├── builder.ts              # buildGraph() with parserOptions
-│   │       └── analyzer.ts             # 7 health checks (stubbed)
-│   ├── vitest.config.ts
-│   └── package.json
-├── specs/
-│   └── architecture.md                 # Full design artifact (19 decisions)
-├── .agents/skills/
-│   ├── project-context/SKILL.md        # Generic project context loader
-│   ├── update-project-context/SKILL.md # Prefers local-context.md
-│   └── run-smoke/SKILL.md             # Generic smoke test (auto-detects project type)
-├── data/
-│   └── smoke_report.md                 # Latest smoke test results
-├── .claude/
-│   ├── CONTEXT.md                      # Stale — trading bot project
-│   └── local-context.md                # This file
-└── package.json                        # Root workspace config
-```
+**Additional:**
+- Updated client types (`shared/api/types.ts`) to match server (`'enum'`, `'type-alias'`, `exportCount`, `hasErrors`, `reExports`)
+- Implemented `DetailPanel` with metrics, kind badge, children list
+- Implemented `SearchPanel` with real-time filtering
+- Implemented `OverlayControls` with view/layout mode toggles
+- Fixed 3 TypeScript errors (null→undefined cast, void/File[] type mismatch, bufferAttribute args)
+- Polish: removed redundant `useFrame` in 3D, all entity nodes visible, cleaned dead code in DetailPanel
+- Made `run-smoke` skill project-generic (auto-detects Node.js, Python, Rust, Go)
+- Updated PLAN.md with Phase 2 completion status
+- **Commits:** `ac0c9c9` (Phase 2 implementation, 37 files, +2669/-286) merged fast-forward to `develop`
+- **Build:** Client 0 errors, Server 0 errors, 27/27 tests pass
 
 ## Tech stack
 
@@ -133,7 +61,7 @@ codevisualizer/
 - **Themes:** Dark mode only (light toggle in Phase 3)
 - **Health visualization:** Heatmap scale (Phase 4)
 
-## What's next (on `feature/phase-2-core-pipeline` → merge to `develop`, then Phase 3)
+## What's next (on `develop`, preparing Phase 3)
 
 ### Phase 3: Visualization & Interaction
 
@@ -143,8 +71,9 @@ codevisualizer/
 4. **Dark/light theme toggle** — full theme system with CSS variables
 5. **Detail panel enhancements** — show imports/exports, health warnings, code preview
 
-## Recent commits (on `feature/phase-2-core-pipeline`)
-- (commits not yet made for Phase 2 implementation — ready to commit and merge)
+## Recent commits (on `develop`)
+- `5c99cc3` Plan: mark Phase 2 as complete (merged to develop)
+- `ac0c9c9` **Phase 2: Core Pipeline** — TS parser, DropZone, 3D/2D graphs, wiring, 27 tests (+2669/-286, 37 files)
 - `7f23890` Add missing commits to PLAN.md table
 - `ca85e77` Adopt `feature/` branch naming convention
 - `f6d840c` Fix PLAN.md: commits table, branch labels, phase-4 name
@@ -159,5 +88,4 @@ codevisualizer/
 - Client tests not yet configured — planned for Phase 3.
 - 3D "force-directed" layout uses spherical fallback — true force sim planned for Phase 3.
 - SearchPanel click handler has TODO — zoom-to-node to be wired in Phase 3.
-- `PLAN.md` and this file updated with Phase 2 completion — not yet committed.
-- No memory directory at `C:\Users\User\.claude\projects` for codevisualizer project — per-project `.claude/memory/` will be created when needed.
+- No memory directory at this project's `.claude/memory/` — not created as no memory values to persist yet.

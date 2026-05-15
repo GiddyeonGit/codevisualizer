@@ -1,0 +1,151 @@
+Task: Layout switching with animated transitions
+Week: 2 (Phase 3)
+Files affected: UPDATE client/src/features/graph-3d/index.tsx, UPDATE client/src/features/graph-2d/index.tsx, UPDATE client/src/features/overlay/index.tsx
+
+---
+
+Context:
+Graph3D currently supports 3 layouts (spherical, concentric, force-directed with spherical fallback) but switches instantly without animation. Graph2D only has force-directed mode and ignores the layout prop entirely. The architecture design requires smooth animated transitions between layouts in both views.
+
+## Graph3D changes
+
+Position computation (computePositions function):
+
+Spherical layout (Fibonacci sphere):
+- N nodes evenly distributed on sphere surface.
+- R = 12 units (fixed radius).
+- Golden angle = PI * (3 - sqrt(5)) ~ 2.39996 rad.
+- For i in 0..N-1: y = 1 - (i / (N-1)) * 2; radius_at_y = sqrt(1 - y*y); theta = goldenAngle * i.
+- Position: (R * radius_at_y * cos(theta), R * y, R * radius_at_y * sin(theta)).
+- Uses THREE.Vector3 for positions.
+
+Concentric layout (rings by node kind):
+- Node kinds ordered by nesting depth: class, interface, function, variable, enum, type-alias, file.
+- First ring (inner, R=4): class nodes.
+- Second ring (R=6): interface, enum, type-alias nodes.
+- Third ring (R=8): function, variable nodes.
+- Outer ring (R=11): file nodes.
+- Within each ring, nodes distributed evenly by angle: theta = (2 * PI * i) / nodesInGroup.
+- Position: (R * cos(theta), 0, R * sin(theta)).
+
+Force-directed layout:
+- Use d3-force-3d package (available on npm as d3-force-3d or implement with d3-force on 2D then add Z).
+- Actually, for 3D force-directed, use d3-force-3d package: npm install d3-force-3d @types/d3-force-3d.
+- Simulation with forceLink, forceManyBody (strength -80), forceCenter (0,0,0), forceCollide (radius 0.8).
+- Run simulation with 60 iterations (use d3.forceSimulation with alpha min 0.001).
+- On each tick, store positions in a ref. After 60 ticks, positions stabilize.
+- This is the only layout that requires async computation -- manage with useEffect for the sim lifecycle.
+
+Animation system (ref-based mesh lerp):
+- Use a useRef<Map<string, THREE.Mesh>> to capture node mesh references via callback refs.
+- Use a useRef<Map<string, THREE.Vector3>> for current display positions (lerp targets).
+- On layout mode change:
+  1. Snapshot current display positions into prevPositions (useRef).
+  2. Compute target positions from the new layout algorithm into targetPositions (useMemo).
+  3. In useFrame, for each mesh: mesh.position.lerp(target, 0.08).
+  4. When distanceToSquared < 0.01, snap to target (skip lerp next frame).
+  5. Use a reusable scratch Vector3 (declared outside useFrame) for zero-allocation lerp.
+
+Edge positions in useFrame:
+- Edges rendered as <line> with BufferGeometry.
+- In useFrame, after updating node positions, update edge geometry positions:
+  - For each edge (sourceId -> targetId), read the source and target mesh positions from meshRefs.
+  - Update the BufferAttribute positions of the edge geometry.
+  - Need edge geometry refs per edge -> useRef<Map<string, THREE.Line>>.
+
+Stopping animation:
+- After all nodes are at target (distanceToSquared < 0.01 for all), skip the lerp block for performance.
+- On next layout change, re-enable animation.
+
+Constants:
+- LERP_RATE = 0.08 (8% per frame -> ~95% in 500ms at 60fps).
+- LERP_THRESHOLD = 0.01 (stop lerping when this close).
+
+## Graph2D changes
+
+The component must now accept and handle a layoutMode prop (from store).
+
+Position computation functions:
+
+Spherical layout (sunflower / Vogel spiral):
+- goldenAngle = PI * (3 - sqrt(5)) ~ 2.39996 rad.
+- R = min(width, height) * 0.4.
+- For i in 0..N-1: radius = R * sqrt(i / N); theta = i * goldenAngle.
+- Position: (centerX + radius * cos(theta), centerY + radius * sin(theta)).
+- Returns array of {x, y} positions matching node order.
+
+Concentric layout (rings by kind):
+- Same ring assignment as 3D: class inner, interface/enum/type-alias middle, function/variable middle-outer, file outer.
+- Ring radii: 30, 60, 90, 120 (in SVG coordinate space).
+- Within each ring, nodes evenly distributed by angle.
+- Returns array of {x, y} positions.
+
+Force-directed layout (existing behavior, unchanged):
+- Keep the existing d3.forceSimulation logic exactly as-is.
+- If layout is 'force-directed', position from the simulation.
+
+Transition integration:
+- D3 uses .transition().tween() to animate nodes between positions.
+- IMPORTANT: Use keyed data join to maintain correct node identity across layout mode switches: `.data(nodes, d => d.id)`. Without a key function, D3 uses index-based join and positions will animate to wrong nodes.
+- Steps on layout change:
+  1. Nodes and edges SVG groups already exist (joined to data with key function).
+  2. On new layout, DON'T re-enter/re-exit -- just compute new target positions.
+  3. Use D3 transition:
+     d3.selectAll('circle.node')
+       .data(nodes)
+       .transition()
+       .duration(600)
+       .ease(d3.easeCubicInOut)
+       .attr('cx', d => targetPositions[d.index].x)
+       .attr('cy', d => targetPositions[d.index].y);
+  4. Edges follow:
+     d3.selectAll('line.edge')
+       .data(edges)
+       .transition()
+       .duration(600)
+       .each(function(d) {
+         // Update line endpoints via tween
+         const sourcePos = targetPositions[sourceNodeIndex];
+         const targetPos = targetPositions[targetNodeIndex];
+         d3.select(this)
+           .attr('x1', sourcePos.x).attr('y1', sourcePos.y)
+           .attr('x2', targetPos.x).attr('y2', targetPos.y);
+       });
+  5. For force-directed layout mode: don't set explicit positions -- rely on simulation.
+     When switching FROM spherical/concentric TO force-directed: set initial (frozen) positions to
+     current display positions, then start the simulation from there.
+     When switching FROM force-directed TO spherical/concentric: stop simulation, tween to targets.
+
+Node labels (show labels on file nodes only, as currently):
+- During transition, labels follow their parent node position.
+- Use transition() on text elements with same duration.
+
+## OverlayControls changes
+
+Currently renders viewMode and layoutMode toggles. No changes needed beyond what already exists.
+
+However, ensure the layout buttons dispatch to store:
+- Each layout button calls store.setLayoutMode('force-directed' | 'spherical' | 'concentric').
+- Active layout button has visual highlight (already implemented).
+
+## Edge cases
+
+Rapid layout mode switches:
+- Graph3D: seamless redirect -- meshes lerp from wherever they currently are toward the NEW target. targetPositions ref is overwritten with new layout positions mid-animation.
+- Graph2D: D3 .transition() automatically cancels pending transitions. Keyed data join (d => d.id) preserves node identity across order changes.
+
+Nodes entering/leaving during layout change:
+- Nodes in target layout but not current: start at center (0,0,0 in 3D, viewport center in 2D) and animate outward.
+- Nodes in current layout but not target: animate toward center and fade out.
+
+Force layout switching (3D):
+- If d3-force-3d types are unavailable, implement fallback: run 2D d3.forceSimulation on x/y axes, derive z from spherical coords using node index angle.
+
+Constraints:
+- No additional dependencies for 2D (D3 transitions are native).
+- d3-force-3d: NEW dependency for 3D force-directed layout. Add to client/package.json.
+- All position computations are deterministic and pure -- pure functions exported for testability.
+- Animation is purely imperative (refs + useFrame) -- no re-renders during animation.
+- Edge geometry updates must avoid BufferAttribute.needsUpdate thrashing (set once after all edits).
+
+Output ONLY the code for the updated client/src/features/graph-3d/index.tsx, client/src/features/graph-2d/index.tsx, and client/package.json. No fences.

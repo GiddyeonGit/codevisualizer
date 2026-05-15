@@ -1,0 +1,174 @@
+Task: Zustand interaction store + App.tsx refactor
+Week: 2 (Phase 3)
+Files affected: NEW client/src/entities/interaction-store.ts, UPDATE client/src/app/App.tsx, UPDATE client/package.json
+
+---
+
+Imports:
+- zustand ^5.0.0 (new dependency)
+- client/src/shared/api/types.ts (GraphData, GraphNode, GraphEdge, ViewMode, LayoutMode, TracePath)
+
+Context:
+App.tsx currently owns all interaction state via 5 useState hooks and passes them as props to child components. Phase 3 adds search-zoom, two-point tracing, theme toggle, and layout switching -- the prop-drilling pattern does not scale. A shared Zustand store becomes the single source of truth.
+
+Store shape (client/src/entities/interaction-store.ts):
+
+--- EXISTING CONTENT (create file) ---
+
+import { create } from 'zustand';
+import type { GraphData, ViewMode, LayoutMode } from '@/shared/api/types';
+
+export interface ThemeColors {
+  bg: string;
+  surface: string;
+  text: string;
+  textSecondary: string;
+  border: string;
+  node: Record<string, string>;
+  edge: string;
+  edgeInaccessible: string;
+  nodeDefault: string;
+  accent: string;
+  selectionGlow: string;
+  tracePath: string;
+  traceSource: string;
+  traceTarget: string;
+  hoverGlow: string;
+}
+
+export interface TraceResult {
+  nodeIds: string[];
+  edgeIds: string[];
+  totalAccessible: boolean;
+}
+
+export interface InteractionState {
+  // Data
+  graphData: GraphData | null;
+
+  // Selection
+  selectedNodeId: string | null;
+
+  // Hover
+  hoveredNodeId: string | null;
+
+  // Trace
+  traceSourceId: string | null;
+  tracePath: TraceResult | null;
+
+  // View
+  viewMode: ViewMode;
+  layoutMode: LayoutMode;
+
+  // Theme
+  theme: 'dark' | 'light';
+  colors: ThemeColors;
+
+  // Camera control (imperative, registered by active view)
+  zoomToNode: ((nodeId: string) => boolean) | null;
+
+  // Actions
+  setGraphData: (data: GraphData | null) => void;
+  selectNode: (nodeId: string | null) => void;
+  setHoveredNode: (nodeId: string | null) => void;
+  toggleTraceSource: (nodeId: string) => void;
+  clearTrace: () => void;
+  setViewMode: (mode: ViewMode) => void;
+  setLayoutMode: (mode: LayoutMode) => void;
+  toggleTheme: () => void;
+  setTheme: (theme: 'dark' | 'light') => void;
+  registerZoomToNode: (fn: ((id: string) => boolean) | null) => void;
+  reset: () => void;
+}
+
+--- END EXISTING CONTENT ---
+
+Implementation details:
+
+1. `selectNode(nodeId)`:
+   - Sets selectedNodeId. If called with null, deselects.
+   - Does NOT move camera (that's controlled by search result clicks).
+
+2. `toggleTraceSource(nodeId)`:
+   - If traceSourceId matches nodeId -> deselect (clearTrace).
+   - If traceSourceId is null -> set traceSourceId = nodeId.
+   - If traceSourceId is different -> runTrace(targetId: nodeId).
+   - runTrace is internal: builds adjacency list from graphData, runs Dijkstra, sets tracePath.
+
+3. `runTrace(targetId)` (internal helper, not on store):
+   - Builds adjacency list from graphData.edges.
+   - Edge weights: isAccessible=true weight=1, isAccessible=false weight=10.
+   - Dijkstra from traceSourceId to targetId.
+   - If path found: set tracePath = { nodeIds, edgeIds, totalAccessible }.
+   - If no path: tracePath stays null, traceSourceId stays set (user can retry).
+   - Edge case: source === target -> set tracePath = { nodeIds: [source], edgeIds: [], totalAccessible: true }.
+
+4. `clearTrace()`:
+   - Sets traceSourceId = null, tracePath = null.
+
+5. `setViewMode(mode)`:
+   - Updates viewMode. Active graph view component checks this via selector.
+
+6. `setLayoutMode(mode)`:
+   - Updates layoutMode. Both graph views check this via selector.
+
+7. `toggleTheme()`:
+   - Flips between 'dark' and 'light'.
+   - Updates colors from the corresponding ThemeColors object.
+   - Sets document.documentElement data-theme attribute.
+   - Persists to localStorage key 'codevisualizer-theme'.
+
+8. `registerZoomToNode(fn)`:
+   - Sets zoomToNode to the callback. Called by active graph view on mount (with its implementation) and on unmount (with null).
+
+9. `reset()`:
+   - Clears all state to initial values except theme preference.
+   - Called when a new project is dropped.
+
+10. ThemeColors objects:
+    - Define DARK_COLORS and LIGHT_COLORS as typed ThemeColors constants in the same file.
+    - DARK_COLORS.bg = '#0f0f13', .surface = '#1a1a23', .text = '#e2e8f0', .textSecondary = '#64748b', .border = '#2a2a3a'
+    - LIGHT_COLORS.bg = '#f8fafc', .surface = '#ffffff', .text = '#1e293b', .textSecondary = '#64748b', .border = '#e2e8f0'
+    - Node colors for both themes should be identical (distinct colors per kind, not brightness-dependent):
+      file='#60a5fa', class='#34d399', interface='#f472b6', function='#fbbf24', variable='#a78bfa', enum='#fb923c', type-alias='#2dd4bf'
+    - All other color values appropriate per theme (darker/muted for dark, lighter/bright for light).
+
+App.tsx changes:
+
+--- EXISTING CONTENT (update) ---
+
+Replace all useState hooks (graphData, viewMode, layoutMode, selectedNodeId) with Zustand selectors:
+- const graphData = useInteractionStore(s => s.graphData);
+- const viewMode = useInteractionStore(s => s.viewMode);
+- const layoutMode = useInteractionStore(s => s.layoutMode);
+- const selectedNodeId = useInteractionStore(s => s.selectedNodeId);
+
+Replace callback handlers with direct store calls:
+- handleDrop -> store.getState().setGraphData(data)
+- handleNodeSelect -> store.getState().selectNode(id)
+- handleBack -> store.getState().reset()
+
+Remove prop-passing to child components:
+- Graph3D gets only data, layoutMode, colors from store selectors + registers zoomToNode internally.
+- Graph2D gets only data, layoutMode, colors from store selectors + registers zoomToNode internally.
+- SearchPanel gets zoomToNode from store + graphData from store.
+- OverlayControls gets viewMode, layoutMode, setViewMode, setLayoutMode from store.
+- DetailPanel gets selectedNodeId from store + graphData from store.
+
+--- END EXISTING CONTENT ---
+
+Constraints:
+- All store actions must be implemented as Zustand get()-set() pattern, not immer.
+- Selectors should select only the slice needed (avoid full-state subscriptions).
+- Theme persistence reads from localStorage on store creation (initial value).
+- No circular dependencies - store imports from shared/api/types only.
+- Use `@/` path alias for imports (Vite config already set up).
+- runTrace is a PRIVATE module-scoped function in interaction-store.ts, not on the store interface. Called internally by toggleTraceSource.
+
+Package.json dependencies to add (consolidated for all Phase 3 tasks):
+- zustand ^5.0.0 (into client/package.json)
+- d3-force-3d (into client/package.json -- for 3D force-directed layout; if @types/d3-force-3d unavailable, implement fallback: run 2D d3-force simulation for x/y, derive z from spherical coords)
+- vitest + jsdom (into client/package.json -- for client unit tests)
+Install via root workspace: cd client && npm install zustand d3-force-3d && npm install -D vitest jsdom
+
+Output ONLY the code for both files. No fences.

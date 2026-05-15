@@ -1,0 +1,109 @@
+Task: Dark/light theme toggle
+Week: 2 (Phase 3)
+Files affected: NEW client/src/shared/ui/ThemeProvider.tsx, UPDATE client/src/app/App.tsx, UPDATE client/src/entities/interaction-store.ts (theme/colors already designed), UPDATE client/index.html, UPDATE client/src/main.tsx
+
+---
+
+Context:
+The architecture design specifies CSS custom properties for HTML elements (bg, surface, text, borders) on :root and [data-theme="dark"], together with Zustand store colors for Three.js. Theme preference persists to localStorage.
+
+## CSS custom properties (client/index.html)
+
+Add to <head> a <style> block OR a new CSS file imported in main.tsx:
+
+```css
+:root {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-dropzone-bg: rgba(59, 130, 246, 0.05);
+  --color-dropzone-border: #3b82f6;
+  --color-overlay-bg: rgba(255, 255, 255, 0.95);
+  --color-overlay-border: #e2e8f0;
+  --color-scrollbar: #cbd5e1;
+  --color-scrollbar-hover: #94a3b8;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --color-bg: #0f0f13;
+  --color-surface: #1a1a23;
+  --color-text: #e2e8f0;
+  --color-text-secondary: #64748b;
+  --color-border: #2a2a3a;
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93bbfc;
+  --color-dropzone-bg: rgba(96, 165, 250, 0.08);
+  --color-dropzone-border: #60a5fa;
+  --color-overlay-bg: rgba(15, 15, 19, 0.95);
+  --color-overlay-border: #2a2a3a;
+  --color-scrollbar: #334155;
+  --color-scrollbar-hover: #475569;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+}
+```
+
+## Theme initialization (client/src/main.tsx)
+
+On app startup:
+1. Read localStorage key 'codevisualizer-theme'.
+2. If exists, set document.documentElement.dataset.theme to the stored value.
+3. If not, check prefers-color-scheme media query: window.matchMedia('(prefers-color-scheme: dark)').matches.
+4. If dark preference, set data-theme="dark", else "light".
+5. Pass initial value to Zustand store's create() call (defaultTheme param).
+
+## Store theme actions
+
+Already defined in interaction-store.ts spec. Ensure toggleTheme and setTheme also:
+
+1. Set the data-theme attribute on document.documentElement.
+2. Store selection to localStorage.setItem('codevisualizer-theme', theme).
+
+## ThemeProvider component (client/src/shared/ui/ThemeProvider.tsx)
+
+Optional wrapper component (not strictly needed since data-theme is set on <html>):
+
+```tsx
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const theme = useInteractionStore(s => s.theme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('codevisualizer-theme', theme);
+  }, [theme]);
+
+  return <>{children}</>;
+}
+```
+
+Wrap App.tsx in ThemeProvider.
+
+## Component updates for theme awareness
+
+SearchPanel, OverlayControls, DetailPanel, DropZone -- update inline styles to use CSS custom properties instead of hardcoded colors:
+
+- Search panel bg: var(--color-overlay-bg), border: 1px solid var(--color-border), text: var(--color-text).
+- OverlayControls bg: var(--color-surface), border: 1px solid var(--color-border), text: var(--color-text).
+- DetailPanel bg: var(--color-surface), border: 1px solid var(--color-border), text: var(--color-text).
+- DropZone bg: var(--color-dropzone-bg), border: 2px dashed var(--color-dropzone-border), text: var(--color-text).
+
+Button for theme toggle: Add a button in OverlayControls:
+- Label: ☀️ / 🌙 depending on current theme.
+- onClick: store.toggleTheme().
+- Styled with var(--color-surface), var(--color-text), etc.
+
+Constraints:
+- CSS custom properties for HTML; Zustand colors for Three.js (materials don't read CSS vars).
+- Theme preference persists across page refreshes.
+- No FOUC (flash of unstyled content) -- set data-theme before React hydration (in index.html <script> block or main.tsx before ReactDOM.createRoot).
+- All existing components must work in both themes without visual regression.
+
+Output ONLY the code. No fences.

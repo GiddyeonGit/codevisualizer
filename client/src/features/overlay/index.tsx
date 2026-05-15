@@ -1,31 +1,33 @@
-import type { ViewMode, LayoutMode } from "@/shared/api/types";
+import { useInteractionStore } from "@/entities/interaction-store";
 
-interface OverlayControlsProps {
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  layoutMode: LayoutMode;
-  onLayoutModeChange: (mode: LayoutMode) => void;
-}
+const buttonStyle = (
+  isActive: boolean,
+): React.CSSProperties => ({
+  padding: "6px 12px",
+  background: isActive ? "var(--color-accent, #3b82f6)" : "transparent",
+  color: isActive ? "#fff" : "var(--color-text, #e2e8f0)",
+  border: `1px solid ${isActive ? "var(--color-accent, #3b82f6)" : "var(--color-border, #2a2a3a)"}`,
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "12px",
+  fontWeight: isActive ? 600 : 400,
+  transition: "all 0.2s ease",
+});
 
-function buttonStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "6px 12px",
-    fontSize: "12px",
-    border: `1px solid ${active ? "#3b82f6" : "#475569"}`,
-    borderRadius: "6px",
-    background: active ? "rgba(59,130,246,0.15)" : "transparent",
-    color: active ? "#3b82f6" : "#94a3b8",
-    cursor: "pointer",
-    fontFamily: "system-ui, sans-serif",
-  };
-}
+export function OverlayControls() {
+  const viewMode = useInteractionStore((s) => s.viewMode);
+  const layoutMode = useInteractionStore((s) => s.layoutMode);
+  const theme = useInteractionStore((s) => s.theme);
+  const setViewMode = useInteractionStore((s) => s.setViewMode);
+  const setLayoutMode = useInteractionStore((s) => s.setLayoutMode);
+  const toggleTheme = useInteractionStore((s) => s.toggleTheme);
 
-export function OverlayControls({
-  viewMode,
-  onViewModeChange,
-  layoutMode,
-  onLayoutModeChange,
-}: OverlayControlsProps) {
+  const layouts = [
+    { value: "force-directed" as const, label: "Force" },
+    { value: "spherical" as const, label: "Globe" },
+    { value: "concentric" as const, label: "Rings" },
+  ];
+
   return (
     <div
       style={{
@@ -33,49 +35,56 @@ export function OverlayControls({
         bottom: "16px",
         left: "16px",
         display: "flex",
-        flexDirection: "column",
         gap: "8px",
-        padding: "12px",
-        background: "rgba(15,15,19,0.95)",
-        border: "1px solid #334155",
-        borderRadius: "8px",
-        fontFamily: "system-ui, sans-serif",
+        alignItems: "center",
+        padding: "10px 14px",
+        background: "var(--color-surface, #1a1a23)",
+        border: "1px solid var(--color-border, #2a2a3a)",
+        borderRadius: "10px",
+        zIndex: 30,
       }}
     >
       {/* View mode toggle */}
       <div style={{ display: "flex", gap: "4px" }}>
         <button
           style={buttonStyle(viewMode === "2d")}
-          onClick={() => onViewModeChange("2d")}
+          onClick={() => setViewMode("2d")}
         >
           2D
         </button>
         <button
           style={buttonStyle(viewMode === "3d")}
-          onClick={() => onViewModeChange("3d")}
+          onClick={() => setViewMode("3d")}
         >
           3D
         </button>
       </div>
 
-      {/* Layout mode selector */}
+      <div style={{ width: "1px", height: "20px", background: "var(--color-border, #2a2a3a)" }} />
+
+      {/* Layout mode toggle */}
       <div style={{ display: "flex", gap: "4px" }}>
-        {(["force-directed", "spherical", "concentric"] as LayoutMode[]).map(
-          (mode) => (
-            <button
-              key={mode}
-              style={buttonStyle(layoutMode === mode)}
-              onClick={() => onLayoutModeChange(mode)}
-            >
-              {mode === "force-directed"
-                ? "Force"
-                : mode === "spherical"
-                  ? "Globe"
-                  : "Rings"}
-            </button>
-          ),
-        )}
+        {layouts.map((l) => (
+          <button
+            key={l.value}
+            style={buttonStyle(layoutMode === l.value)}
+            onClick={() => setLayoutMode(l.value)}
+          >
+            {l.label}
+          </button>
+        ))}
       </div>
+
+      <div style={{ width: "1px", height: "20px", background: "var(--color-border, #2a2a3a)" }} />
+
+      {/* Theme toggle */}
+      <button
+        style={buttonStyle(false)}
+        onClick={toggleTheme}
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      >
+        {theme === "dark" ? "☀️" : "🌙"}
+      </button>
     </div>
   );
 }

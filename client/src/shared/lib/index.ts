@@ -1,3 +1,3 @@
-// Shared utilities — helpers, hooks, formatters
-// To be populated as needed
-export {};
+// Shared utilities -- helpers, hooks, formatters
+export { runDijkstra } from "./tracer";
+export type { TraceResult } from "./tracer";

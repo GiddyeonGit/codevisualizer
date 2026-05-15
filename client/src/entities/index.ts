@@ -1,2 +1,3 @@
-// Entities layer — business models (to be populated as the project grows)
-export {};
+// Entities layer -- business models
+export { useInteractionStore } from "./interaction-store";
+export type { InteractionState, ThemeColors } from "./interaction-store";

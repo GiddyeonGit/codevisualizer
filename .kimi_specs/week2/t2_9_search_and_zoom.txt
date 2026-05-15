@@ -1,0 +1,120 @@
+Task: Search panel + zoom-to-node camera animation
+Week: 2 (Phase 3)
+Files affected: UPDATE client/src/features/search/index.tsx, UPDATE client/src/features/graph-3d/index.tsx, UPDATE client/src/features/graph-2d/index.tsx
+
+---
+
+Context:
+SearchPanel currently renders a filtered node list but the onClick handler is a TODO placeholder ("zoom camera to this node"). The architecture design specifies that clicking a search result navigates the camera to that node in both 2D and 3D views.
+
+## SearchPanel changes
+
+Remove the placeholder TODO. Replace onClick with camera navigation:
+
+```tsx
+onClick={() => {
+  // Get the zoomToNode function from the store
+  const zoomFn = useInteractionStore.getState().zoomToNode;
+  if (zoomFn) {
+    zoomFn(node.id);
+  }
+  // Close the search results
+  setQuery('');
+}}
+```
+
+Edge case -- no view mounted: If the user clicks a search result before any graph view has registered (during loading, on error screen, or back on DropZone), zoomToNode is null and the click silently does nothing. To give feedback, check if zoomFn exists before calling it. If null, consider a brief console.warn (or a toast if a toast system exists). For now, a no-op is acceptable since this state is transient.
+
+SearchPanel itself does NOT need to know which view is active -- it calls the registered callback.
+
+Trace mode indicator: SearchPanel must also read traceSourceId from the store. When traceSourceId is set (not null), show a visual indicator above the search input:
+- Text: "Trace mode -- Ctrl/Cmd+click a target node"
+- Small badge: amber background (#fbbf24), dark text (#1e293b), 11px font.
+- Clickable "Cancel" button that calls store.clearTrace().
+
+The trace badge is positioned above the search input (returned by the search feature). It disappears when traceSourceId becomes null.
+
+No other changes to SearchPanel (filtering, re-styling stay as-is).
+
+## Graph3D: registerZoomToNode implementation
+
+On mount, register a flyToNode implementation via store.registerZoomToNode:
+
+```
+flyToNode(nodeId: string): boolean
+```
+
+Implementation:
+1. Look up the node mesh in meshRefs by nodeId.
+2. If not found, return false.
+3. Get the mesh's world position (mesh.position.clone()).
+4. Animate the camera:
+   - Use a ref for animation state (animating, startTime, startPosition, targetPosition).
+   - Set refs to start the animation on next frame.
+   - In useFrame, if animating:
+     - progress = (now - startTime) / FLY_DURATION (800ms).
+     - eased = easeInOutCubic(progress).
+     - camera.position.lerpVectors(startPos, targetPos, eased).
+     - controls.target.lerpVectors(startTarget, targetPos, eased).
+     - controls.update().
+     - When progress >= 1, stop animating.
+5. The target position should place the camera at a distance that frames the node well:
+   - For spherical/concentric: ~8 units from node position.
+   - For force-directed: scale by node density (default 8).
+   - Direction: from node towards global center (node.position.normalize() * -8 + node.position).
+6. Return true.
+
+Cleanup: On unmount, call store.registerZoomToNode(null).
+
+Canvas empty-click handling:
+- Add onPointerMissed to <Canvas>: calls store.selectNode(null), store.setHoveredNode(null).
+
+## Graph2D: registerZoomToNode implementation
+
+On mount, register a zoomToNode implementation:
+
+```
+zoomToNode(nodeId: string): boolean
+```
+
+Implementation:
+1. Find the node datum from graphData.nodes.
+2. If not found, return false.
+3. Get the circle's current cx/cy (from the D3 selection or stored positions ref).
+4. Transition the zoom transform:
+   - svg.transition().duration(600).ease(d3.easeCubicInOut)
+     .call(d3.zoom().transform, d3.zoomIdentity
+       .translate(width / 2, height / 2)
+       .scale(2)
+       .translate(-nodeX, -nodeY));
+5. This centers the node and zooms in by 2x.
+6. Return true.
+
+Cleanup: On unmount, call store.registerZoomToNode(null).
+
+## Selection highlight
+
+Selected node visual in Graph3D:
+- The selected node mesh (selectedNodeId from store) should have:
+  - emissive color matching its node color.
+  - emissiveIntensity = 0.3 (vs 0 for unselected).
+  - Scale = 1.3x normal radius.
+- Read selectedNodeId from store via useInteractionStore(s => s.selectedNodeId).
+- In SphereNode component: check if node.id === selectedNodeId.
+
+Selected node visual in Graph2D:
+- The selected node circle should have:
+  - stroke = '#60a5fa' (accent blue).
+  - strokeWidth = 2.
+  - r = baseRadius * 1.3.
+- Read selectedNodeId from store via useInteractionStore(s => s.selectedNodeId).
+- Apply conditionally in the D3 rendering.
+
+Constraints:
+- The zoomToNode callback registration pattern avoids coupling SearchPanel to any view.
+- Only ONE view is mounted at a time (viewMode toggle), so only one zoomToNode handler exists.
+- Camera animation in 3D uses linear interpolation with easeInOutCubic easing.
+- D3 zoom transition uses the native d3-zoom behavior.
+- No new dependencies needed.
+
+Output ONLY the code. No fences.

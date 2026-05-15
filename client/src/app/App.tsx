@@ -1,87 +1,67 @@
-import { useState, useCallback } from "react";
+import { useInteractionStore } from "@/entities/interaction-store";
 import { DropZone } from "@/features/drop-zone";
 import { Graph3D } from "@/features/graph-3d";
 import { Graph2D } from "@/features/graph-2d";
 import { SearchPanel } from "@/features/search";
 import { OverlayControls } from "@/features/overlay";
 import { DetailPanel } from "@/features/details";
-import type { GraphData, ViewMode, LayoutMode } from "@/shared/api/types";
 
 export function App() {
-  const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("3d");
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("force-directed");
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-
-  const handleFileDrop = useCallback((data: GraphData) => {
-    setGraphData(data);
-  }, []);
-
-  const handleNodeClick = useCallback((nodeId: string) => {
-    setSelectedNodeId((prev) => (prev === nodeId ? null : nodeId));
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setGraphData(null);
-    setSelectedNodeId(null);
-  }, []);
+  const graphData = useInteractionStore((s) => s.graphData);
+  const viewMode = useInteractionStore((s) => s.viewMode);
+  const selectedNodeId = useInteractionStore((s) => s.selectedNodeId);
+  const reset = useInteractionStore((s) => s.reset);
+  const setGraphData = useInteractionStore((s) => s.setGraphData);
 
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
-      {!graphData ? (
-        <DropZone onFileDrop={handleFileDrop} />
-      ) : (
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        position: "relative",
+        background: "var(--color-bg, #0f0f13)",
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
+      {graphData ? (
         <>
-          {viewMode === "3d" ? (
-            <Graph3D data={graphData} layout={layoutMode} />
-          ) : (
-            <Graph2D data={graphData} onNodeClick={handleNodeClick} />
-          )}
-
-          {/* Floating UI panels */}
-          <SearchPanel data={graphData} />
-          <OverlayControls
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            layoutMode={layoutMode}
-            onLayoutModeChange={setLayoutMode}
-          />
-          <DetailPanel
-            data={graphData ?? undefined}
-            selectedNodeId={selectedNodeId}
-            onNodeSelect={setSelectedNodeId}
-          />
-
-          {/* Back button */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
+            {viewMode === "3d" ? <Graph3D /> : <Graph2D />}
+          </div>
+          <SearchPanel />
+          <OverlayControls />
+          <DetailPanel />
           <button
-            onClick={handleReset}
+            onClick={reset}
             style={{
               position: "absolute",
               top: "16px",
               right: "16px",
-              padding: "8px 14px",
-              background: "rgba(15,15,19,0.9)",
-              border: "1px solid #334155",
+              padding: "8px 16px",
+              background: "var(--color-surface, #1a1a23)",
+              color: "var(--color-text, #e2e8f0)",
+              border: "1px solid var(--color-border, #2a2a3a)",
               borderRadius: "8px",
-              color: "#94a3b8",
-              fontSize: "13px",
               cursor: "pointer",
-              fontFamily: "system-ui, sans-serif",
-              zIndex: 10,
-              transition: "all 0.2s",
+              fontSize: "13px",
+              fontWeight: 500,
+              zIndex: 50,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#1e293b";
-              e.currentTarget.style.color = "#e2e8f0";
+              e.currentTarget.style.background = "var(--color-accent-hover, #2563eb)";
+              e.currentTarget.style.color = "#fff";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(15,15,19,0.9)";
-              e.currentTarget.style.color = "#94a3b8";
+              e.currentTarget.style.background = "var(--color-surface, #1a1a23)";
+              e.currentTarget.style.color = "var(--color-text, #e2e8f0)";
             }}
           >
             ← Back
           </button>
         </>
+      ) : (
+        <DropZone onFileDrop={(data) => setGraphData(data)} />
       )}
     </div>
   );
