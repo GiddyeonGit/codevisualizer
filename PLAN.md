@@ -53,10 +53,10 @@ parallel theme branches.
 
 | Branch | Phase | Status |
 |--------|-------|--------|
-| `phase-1-scaffold` | Scaffold | ✅ Merged to `develop` |
+| `phase-1-scaffold` | Scaffold | ✅ Complete (committed to `develop`) |
 | `phase-2-core-pipeline` | Core Pipeline | ⬅️ Active |
 | `phase-3-visualization` | Visualization & Interaction | 🔜 |
-| `phase-4-overlay` | Architectural Overlay | 🔜 |
+| `phase-4-architectural-overlay` | Architectural Overlay | 🔜 |
 | `phase-5-refinement` | Refinement | 🔜 |
 
 ### Update PLAN.md with every commit
@@ -174,5 +174,9 @@ cd server && npm run dev     # Express only
 
 | SHA | Branch | Description |
 |-----|--------|-------------|
+| SHA | Branch | Description |
+|-----|--------|-------------|
 | `f7c4709` | `main` | Initial commit (pre-scaffold) |
-| `93d566c` | `develop` | Initial scaffold: client + server + design artifact + skills |
+| `93d566c` | `develop` / `phase-1-scaffold` | Initial scaffold: client + server + design artifact + skills |
+| `b8567eb` | `phase-2-core-pipeline` | PLAN.md workflow section + branch convention |
+| `2306ab3` | `phase-2-core-pipeline` | Polish: simplify task table, retroactive phase-1 branch |
