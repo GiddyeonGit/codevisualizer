@@ -1,0 +1,55 @@
+{
+  "skills": [
+    {
+      "name": "tradebot-context",
+      "path": ".agents/skills/tradebot-context"
+    },
+    {
+      "name": "run-smoke",
+      "path": ".agents/skills/run-smoke"
+    },
+    {
+      "name": "update-project-context",
+      "path": ".agents/skills/update-project-context"
+    },
+    {
+      "name": "update-specs-for-agent",
+      "path": ".agents/skills/update-specs-for-agent"
+    },
+    {
+      "name": "python-dev",
+      "path": ".agents/skills/python-dev"
+    },
+    {
+      "name": "careful-planner",
+      "path": ".agents/skills/careful-planner"
+    },
+    {
+      "name": "front-end",
+      "path": ".agents/skills/front-end"
+    },
+    {
+      "name": "gemini-delegation",
+      "path": ".agents/skills/gemini-delegation"
+    },
+    {
+      "name": "openrouter-delegation",
+      "path": ".agents/skills/openrouter-delegation"
+    }
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(curl.exe -s \"http://localhost:5050/api/errors?level=ERROR&limit=50\")",
+      "Bash(python.exe -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'ERROR count: {len\\(d\\)}'\\)\")",
+      "Bash(Get-Content C:\\\\Users\\\\User\\\\Desktop\\\\Bot\\\\data\\\\logs\\\\tradebot.log -Tail 30)",
+      "Bash(curl.exe -s -X POST http://localhost:5050/api/bot/start -H \"Content-Type: application/json\" -d '{\"watchlist\":[\"BTCUSDT\"],\"timeframe\":\"1h\",\"strategy_name\":\"rsi\",\"paper\":true}')",
+      "Bash(curl.exe -s -X POST http://localhost:5050/api/bot/debug/force-trade)",
+      "Bash(npx tsc *)",
+      "Bash(python.exe -c \"import sqlite3; c=sqlite3.connect\\(r'C:\\\\Users\\\\User\\\\Desktop\\\\Bot\\\\data\\\\trades.db'\\).cursor\\(\\); print\\(c.execute\\('SELECT key,value FROM engine_state WHERE key=\\\\\"cooldowns\\\\\"'\\).fetchall\\(\\)\\)\")",
+      "Bash(python.exe -c \"import sqlite3; c=sqlite3.connect\\(r'C:\\\\Users\\\\User\\\\Desktop\\\\Bot\\\\data\\\\trades.db'\\).cursor\\(\\); print\\([t[0] for t in c.execute\\('SELECT name FROM sqlite_master WHERE type=\\\\\"table\\\\\"'\\).fetchall\\(\\)]\\)\")",
+      "Bash(python.exe -c \"import sqlite3; c=sqlite3.connect\\(r'C:\\\\Users\\\\User\\\\Desktop\\\\Bot\\\\src\\\\data\\\\trades.db'\\).cursor\\(\\); print\\(c.execute\\('SELECT key,value FROM engine_state WHERE key=\\\\\"cooldowns\\\\\"'\\).fetchall\\(\\)\\)\")",
+      "Bash(curl.exe -s -X POST http://localhost:5050/api/bot/debug/force-trade -H \"Content-Type: application/json\" -d '{\"side\":\"buy\"}')",
+      "Bash(curl.exe -s -X POST http://localhost:5050/api/bot/close-position -H \"Content-Type: application/json\" -d '{\"position_id\":\"force-1778418895\"}')"
+    ]
+  }
+}
