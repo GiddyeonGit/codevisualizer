@@ -1,7 +1,7 @@
 export interface GraphNode {
   id: string;
   label: string;
-  kind: "file" | "class" | "interface" | "function" | "variable";
+  kind: "file" | "class" | "interface" | "function" | "variable" | "enum" | "type-alias";
   filePath: string;
   parentId?: string;
   childIds?: string[];
@@ -10,8 +10,11 @@ export interface GraphNode {
     methodCount: number;
     dependencyCount: number;
     inheritanceDepth: number;
+    exportCount?: number;
+    hasErrors?: boolean;
   };
   isPublic: boolean;
+  reExports?: { sourceId: string; sourcePath: string }[];
 }
 
 export interface GraphEdge {

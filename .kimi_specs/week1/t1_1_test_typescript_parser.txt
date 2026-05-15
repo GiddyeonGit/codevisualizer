@@ -1,0 +1,126 @@
+Generate vitest tests for server/src/parsers/typescript.ts using real mini-project fixtures.
+
+Imports:
+import { describe, it, expect, beforeAll } from 'vitest'
+import { typescriptParser } from '../../src/parsers/typescript'
+import { GraphNode, GraphEdge } from '../../src/types'
+import path from 'path'
+import fs from 'fs'
+
+Context:
+- Tests use real mini-project fixtures in server/test/fixtures/ts/
+- Each fixture is a self-contained TypeScript project directory
+- Fixtures include a tsconfig.json where needed for path resolution tests
+- vitest is configured at the server level (package.json test script)
+
+FIXTURE SETUP (create before tests run):
+
+Fixture 1: simple-imports (server/test/fixtures/ts/simple-imports/)
+  src/index.ts:
+    import { greet } from './greeter'
+    import { User } from './models/user'
+    const result = greet('World')
+  src/greeter.ts:
+    export function greet(name: string): string { return 'Hello, ' + name }
+  src/models/user.ts:
+    export interface User { id: number; name: string }
+
+Fixture 2: classes-and-interfaces (server/test/fixtures/ts/classes/)
+  src/vehicle.ts:
+    export interface Vehicle { move(): void }
+    export class Car implements Vehicle { move() {} }
+  src/truck.ts:
+    import { Vehicle } from './vehicle'
+    export class Truck implements Vehicle { move() {} }
+
+Fixture 3: re-exports (server/test/fixtures/ts/re-exports/)
+  src/index.ts: export { Component } from './components'
+  src/components.ts: export const Component = 'hello'
+
+Fixture 4: with-tsconfig (server/test/fixtures/ts/with-tsconfig/)
+  tsconfig.json: { compilerOptions: { baseUrl: '.', paths: { '@/*': ['src/*'] } } }
+  src/index.ts: import { helper } from '@/utils/helper'
+  src/utils/helper.ts: export function helper() { return 42 }
+
+Fixture 5: enums-and-types (server/test/fixtures/ts/enums/)
+  src/index.ts:
+    export enum Color { Red, Green, Blue }
+    export type Status = 'active' | 'inactive'
+    export const PI = 3.14
+
+Fixture 6: syntax-errors (server/test/fixtures/ts/errors/)
+  src/broken.ts: export function broken( { return 1 }
+
+TEST CASES:
+
+Test class: TypeScriptParser
+
+Test: parse_simple_imports_creates_file_node
+- Parse simple-imports fixture src/index.ts
+- Assert nodes contains a node with kind='file', label='index.ts'
+- Assert the file node has metrics.lines > 0
+
+Test: parse_simple_imports_creates_import_edges
+- Parse simple-imports fixture src/index.ts
+- Assert edges contains an edge with kind='import', sourceId containing 'index.ts', targetId containing 'greeter'
+
+Test: parse_external_deps_marked_as_external
+- Parse a file with import from 'lodash'
+- Assert edge targetId starts with 'external:'
+
+Test: parse_class_with_extends
+- Parse classes fixture src/vehicle.ts
+- Assert nodes contains a node with kind='class', label='Car'
+- Assert edges contains an edge with kind='implements' from 'Car' to 'Vehicle'
+
+Test: parse_interface
+- Parse classes fixture src/vehicle.ts
+- Assert nodes contains a node with kind='interface', label='Vehicle'
+
+Test: parse_enum
+- Parse enums fixture src/index.ts
+- Assert nodes contains a node with kind='enum', label='Color'
+
+Test: parse_type_alias
+- Parse enums fixture src/index.ts
+- Assert nodes contains a node with kind='type-alias', label='Status'
+
+Test: parse_variable
+- Parse enums fixture src/index.ts
+- Assert nodes contains a node with kind='variable', label='PI'
+
+Test: parse_re_export_creates_two_hop_edges
+- Parse re-exports fixture src/index.ts
+- Assert edges contains an edge from the importer (barrel) to the source (components)
+- Verify there are edges representing both hops
+
+Test: parse_with_detailedNodes_false_skips_functions
+- Parse with options: { detailedNodes: false }
+- Assert nodes does NOT contain nodes with kind='function' or kind='variable' or kind='enum' or kind='type-alias'
+- Assert nodes still contains nodes with kind='file', 'class', 'interface'
+
+Test: parse_syntax_errors_sets_hasErrors_flag
+- Parse errors fixture src/broken.ts
+- Assert the file node has metrics.hasErrors === true
+- Assert no exception is thrown (graceful degradation)
+
+Test: parse_empty_file_returns_file_node
+- Parse a file with empty content ''
+- Assert exactly one node with kind='file'
+- Assert edges is empty
+
+Test: parse_real_project_fixture_end_to_end
+- Parse a directory of files (simple-imports fixture) by calling parse on each file
+- Build GraphData manually by merging results
+- Assert total nodes >= 3 (index.ts, greeter.ts, User interface/file nodes)
+- Assert total edges >= 2 (both import edges)
+
+Constraints:
+- Use path.join(__dirname, '..', 'fixtures', 'ts', ...) for fixture paths
+- No docstrings
+- Use toBeDefined, toEqual, toContainEqual for assertions
+- Use toBeGreaterThan for numeric assertions
+- Type hints on all test functions: -> void
+- Create fixtures as directory structures with .ts files before tests run (use fs.mkdirSync and fs.writeFileSync in beforeAll)
+- Clean up fixtures in afterAll if desired (optional -- gitignore them if preferred)
+- Output ONLY the complete test file. No fences. No prose.

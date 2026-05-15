@@ -1,4 +1,5 @@
 import { parseFile } from "../parsers/index.js";
+import type { ParserOptions } from "../parsers/index.js";
 import type { GraphNode, GraphEdge } from "../types.js";
 
 export interface BuildOptions {
@@ -9,6 +10,8 @@ export interface BuildOptions {
   fileContents: Map<string, string>;
   /** Whether to follow imports recursively */
   recursive?: boolean;
+  /** Options to pass to parsers */
+  parserOptions?: ParserOptions;
 }
 
 /** Build a unified dependency graph from multiple files */
@@ -18,13 +21,13 @@ export function buildGraph(options: BuildOptions): { nodes: GraphNode[]; edges: 
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
 
-  const { filePaths, fileContents } = options;
+  const { filePaths, fileContents, parserOptions } = options;
 
   for (const filePath of filePaths) {
     const content = fileContents.get(filePath);
     if (!content) continue;
 
-    const result = parseFile(content, filePath);
+    const result = parseFile(content, filePath, parserOptions);
 
     // Deduplicate nodes
     for (const node of result.nodes) {

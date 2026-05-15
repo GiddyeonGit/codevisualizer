@@ -1,0 +1,138 @@
+Generate the COMPLETE updated file server/src/parsers/typescript.ts using the TypeScript Compiler API.
+
+Imports:
+import ts from 'typescript'
+import path from 'path'
+import fs from 'fs'
+import { GraphNode, GraphEdge, ParserResult } from '../types'
+import { FileParser, ParserOptions } from './index'
+
+Context:
+- The project uses the TS Compiler API (ts.createSourceFile + AST visitor with forEachChild and switch on SyntaxKind)
+- Parser signature: parse(filePath: string, content: string, options?: ParserOptions) -> ParserResult
+- ParserOptions: { tsconfigPath?: string, detailedNodes?: boolean }
+- Default detailedNodes=true emits all entity kinds; false emits only 'file', 'class', 'interface'
+- The registry already has registerParser, getParserForFile in server/src/parsers/index.ts
+
+--- EXISTING CONTENT (preserve) ---
+The current typescript.ts uses regex for import and class detection. Replace entirely with TS Compiler API visitor pattern.
+
+Changes:
+1. Define supportedExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+
+2. Export a `typescriptParser` object implementing FileParser with a `parse` method:
+
+   FUNCTION: parse(filePath: string, content: string, options?: ParserOptions) -> ParserResult
+   - Create a ts.SourceFile via ts.createSourceFile with scriptKind based on extension
+   - Initialize nodes: GraphNode[] = [], edges: GraphEdge[] = []
+   - Create a file-level GraphNode with kind='file', label = path.basename(filePath), filePath = filePath
+   - Set metrics on the file node: lines = content.split('\n').length
+   - If options?.tsconfigPath, read the tsconfig, cache it, and extract baseUrl and paths for import resolution
+
+3. AST Visitor:
+   - Walk the AST using ts.forEachChild recursively
+   - For each declaration node, switch on ts.SyntaxKind:
+
+   SyntaxKind.ClassDeclaration:
+     - Create a GraphNode with kind='class', label = class name from declaration.name
+     - Set isPublic=true if has export modifier
+     - Set parentId = file node id
+     - Track childIds on the file node
+     - If extends clause: create GraphEdge with kind='extends', sourceId=class id, targetId=resolved extends name
+     - If implements clause(s): create GraphEdge with kind='implements' per interface
+     - Compute metrics: methodCount = count of MethodDeclaration children, inheritanceDepth = count chained extends
+     - Add to nodes[]
+
+   SyntaxKind.InterfaceDeclaration:
+     - Create a GraphNode with kind='interface', label = interface name
+     - isPublic = has export modifier
+     - parentId = file node id
+     - If extends clause: create GraphEdge with kind='extends'
+     - Add to nodes[]
+
+   SyntaxKind.FunctionDeclaration:
+     - Skip if detailedNodes=false
+     - Create a GraphNode with kind='function', label = function name
+     - isPublic = has export modifier
+     - parentId = file node id
+     - Add to nodes[]
+
+   SyntaxKind.VariableStatement:
+     - Skip if detailedNodes=false
+     - For each VariableDeclaration in the statement's declarationList:
+       - Create a GraphNode with kind='variable', label = variable name
+       - isPublic = has export keyword on the parent statement
+       - parentId = file node id
+     - Add to nodes[]
+
+   SyntaxKind.EnumDeclaration:
+     - Skip if detailedNodes=false
+     - Create a GraphNode with kind='enum', label = enum name from declaration.name
+     - isPublic = has export modifier
+     - parentId = file node id
+     - Add to nodes[]
+
+   SyntaxKind.TypeAliasDeclaration:
+     - Skip if detailedNodes=false
+     - Create a GraphNode with kind='type-alias', label = type alias name
+     - isPublic = has export modifier
+     - parentId = file node id
+     - Add to nodes[]
+
+4. Import Extraction:
+   - Collect all ImportDeclaration nodes from the AST
+   - For each ImportDeclaration:
+     - Extract the moduleSpecifier text (the string literal)
+     - Call resolveDependencyPath(importPath, filePath, options?.tsconfigPath) -> resolvedId
+     - Create a GraphEdge with kind='import', sourceId=file node id, targetId=resolvedId
+     - If the importPath starts with '.' or '/', mark isAccessible=true
+     - If external, mark isAccessible=false and targetId = 'external:' + packageName
+     - For named imports (ImportClause.namedBindings), create import edges for individual bindings
+   - Also collect require() calls via the same visitor (look for CallExpression with identifier 'require')
+
+5. Export Tracking:
+   - Collect all ExportDeclaration nodes
+   - If it's a re-export (export * from '...' or export { X } from '...'):
+     - Create two-hop edges: (importer) -> barrel edge, (barrel) -> source edge
+     - The barrel file gets a re-export marker in its metadata
+
+6. Import Resolution:
+   FUNCTION: resolveDependencyPath(importPath: string, currentFilePath: string, tsconfigPath?: string) -> string
+   - If importPath starts with '.' or '/':
+     - If tsconfigPath is provided:
+       - Read and cache tsconfig.json
+       - Check if importPath matches any compilerOptions.paths alias pattern
+       - If match: resolve through the alias using baseUrl
+       - If no match: fall through to extension probing
+     - Try extensions in order: .ts, .tsx, .d.ts, then /index.ts, /index.d.ts
+     - Return the resolved absolute path
+     - If tsconfigPath is absent, only do extension probing
+   - Else (starts with non-'.' non-'/'): return 'external:' + importPath.split('/')[0]
+
+7. Metrics Computation:
+   - Each entity node gets a metrics object:
+     {
+       lines: number (content.split('\n').length for file nodes; count of source lines within the AST node for others),
+       methodCount: number (only for classes -- count of MethodDeclaration children),
+       dependencyCount: number (count of outgoing import edges),
+       inheritanceDepth: number (only for classes -- chain length of extends),
+       exportCount: number (count of exported children for file nodes)
+     }
+
+8. Error Handling:
+   - Wrap the main visitor in try/catch per file
+   - On syntax error: set a property hasErrors: true on the file node (extend GraphNode to support it)
+   - Still emit whatever nodes/edges were successfully parsed
+   - Continue to next file -- do not throw
+
+9. Return the assembled ParserResult { nodes, edges }
+
+Constraints:
+- No console.log or debug output
+- Named exports only
+- Type hints on everything
+- Use ts.SyntaxKind switch, not string-based type checking
+- No docstrings
+- read source file and look around to understand exact existing import/export/interface patterns before final output
+- The FileParser interface signature is parse(filePath: string, content: string): ParserResult, not my old one
+- Output ONLY the code for the COMPLETE updated file. No fences. No prose.

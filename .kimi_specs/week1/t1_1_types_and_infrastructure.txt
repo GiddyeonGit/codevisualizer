@@ -1,0 +1,125 @@
+Two file changes to support the TypeScript Compiler API parser.
+
+================================================================================
+=== FILE 1: server/src/types.ts ===
+
+Generate the COMPLETE updated file server/src/types.ts.
+
+--- EXISTING CONTENT (keep exactly) ---
+Current GraphNode kind is: 'file' | 'class' | 'interface' | 'function' | 'variable'
+Current GraphEdge kind is: 'import' | 'extends' | 'implements' | 'uses'
+Current GraphNode metrics has: lines, methodCount, dependencyCount, inheritanceDepth
+
+Changes:
+1. Extend GraphNode.kind to include: 'enum' | 'type-alias'
+   New union: kind: 'file' | 'class' | 'interface' | 'function' | 'variable' | 'enum' | 'type-alias'
+
+2. Add optional 'hasErrors' field to GraphNode.metrics:
+   hasErrors?: boolean -- set to true when the TS Compiler API encounters syntax errors
+
+3. Add optional 'exportCount' field to GraphNode.metrics:
+   exportCount?: number -- count of exported declarations within a file node
+
+4. Add optional 'reExports' field to GraphNode to track barrel file re-exports:
+   reExports?: { sourceId: string; sourcePath: string }[]
+
+Constraints:
+- Named exports only
+- Type hints on everything
+- Preserve all existing code exactly as-is -- only add the new fields
+- Output ONLY the complete file. No fences. No prose.
+
+================================================================================
+=== FILE 2: server/src/parsers/index.ts ===
+
+Generate the COMPLETE updated file server/src/parsers/index.ts.
+
+--- EXISTING CONTENT (keep exactly) ---
+Current FileParser interface:
+  interface FileParser {
+    supportedExtensions: string[];
+    parse(filePath: string, content: string): ParserResult;
+  }
+Current ParserResult:
+  interface ParserResult {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  }
+
+Changes:
+1. Add new exported interface ParserOptions BEFORE the FileParser interface:
+   interface ParserOptions {
+     tsconfigPath?: string;     // Path to tsconfig.json for path resolution
+     detailedNodes?: boolean;   // If false, skip functions/variables/enums/type-aliases (default true)
+   }
+
+2. Update FileParser interface to accept optional ParserOptions:
+   parse(filePath: string, content: string, options?: ParserOptions): ParserResult;
+
+3. Update parseFile function signature to accept and forward ParserOptions:
+   parseFile(filePath: string, content: string, options?: ParserOptions): ParserResult;
+
+4. Update all calls to parser.parse() inside parseFile to pass options through:
+   parser.parse(filePath, content, options)
+
+Constraints:
+- Named exports only
+- Type hints on everything
+- Preserve existing code -- only modify the signatures and add the new interface
+- Output ONLY the complete file. No fences. No prose.
+
+================================================================================
+=== FILE 3: server/src/graph/builder.ts ===
+
+Generate the COMPLETE updated file server/src/graph/builder.ts.
+
+--- EXISTING CONTENT (keep exactly) ---
+Current BuildOptions: { projectRoot, filePaths, fileContents, recursive }
+Current buildGraph calls parseFile(path, content)
+
+Changes:
+1. Add optional 'parserOptions' field to BuildOptions interface:
+   parserOptions?: import('../parsers/index').ParserOptions
+
+2. In buildGraph, pass options.parserOptions through to parseFile:
+   const result = parseFile(path, content, options.parserOptions)
+
+Constraints:
+- Named exports only
+- Type hints on everything
+- Preserve existing dedup logic verbatim
+- Output ONLY the complete file. No fences. No prose.
+
+================================================================================
+=== FILE 4: server/src/index.ts ===
+
+Generate the COMPLETE updated file server/src/index.ts.
+
+--- EXISTING CONTENT (keep exactly) ---
+Current POST /api/parse handler:
+  - Receives files via multer upload.array('files')
+  - Returns stub { nodes: [], edges: [], projectRoot: '' }
+
+Changes:
+1. Import buildGraph from './graph/builder.js' and analyzeGraph from './graph/analyzer.js'
+2. Import ParserOptions type
+3. In the POST /api/parse handler:
+   a. Create fileContents Map<string, string> from the uploaded files (req.files as Express.Multer.File[])
+   b. Derive filePaths from the file keys
+   c. Determine projectRoot from a 'root' field on req.body, or use the common prefix of all file paths
+   d. Check if a tsconfig file was uploaded -- if found among files, set parserOptions.tsconfigPath
+   e. Call buildGraph({ projectRoot, filePaths, fileContents, recursive: false, parserOptions })
+   f. Call analyzeGraph(result) to run health checks (stubbed -- will be enriched in Phase 4)
+   g. Return { nodes: result.nodes, edges: result.edges, projectRoot } as JSON
+
+4. Add error handling:
+   - Wrap the parse logic in try/catch
+   - On error, return 500 with { error: string }
+
+5. Remove the TODO comment about routing files to parsers
+
+Constraints:
+- Named exports only
+- Type hints on everything
+- Preserve GET /api/hello and GET /api/trace endpoints as-is
+- Output ONLY the complete file. No fences. No prose.

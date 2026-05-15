@@ -2,7 +2,7 @@
 export interface GraphNode {
   id: string;
   label: string;
-  kind: "file" | "class" | "interface" | "function" | "variable";
+  kind: "file" | "class" | "interface" | "function" | "variable" | "enum" | "type-alias";
   /** Path relative to project root */
   filePath: string;
   /** Parent container node id (e.g., which file this class lives in) */
@@ -15,7 +15,11 @@ export interface GraphNode {
     methodCount: number;
     dependencyCount: number;
     inheritanceDepth: number;
+    exportCount?: number;
+    hasErrors?: boolean;
   };
+  /** Re-export tracking */
+  reExports?: { sourceId: string; sourcePath: string }[];
   /** Whether this node is externally accessible */
   isPublic: boolean;
 }

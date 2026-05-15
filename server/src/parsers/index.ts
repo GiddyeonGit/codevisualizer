@@ -4,6 +4,11 @@ import type { GraphNode, GraphEdge } from "../types.js";
 import { typescriptParser } from "./typescript.js";
 import { pythonParser } from "./python.js";
 
+export interface ParserOptions {
+  tsconfigPath?: string;
+  detailedNodes?: boolean;
+}
+
 export interface ParserResult {
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -11,7 +16,7 @@ export interface ParserResult {
 
 export interface FileParser {
   supportedExtensions: string[];
-  parse(content: string, filePath: string): ParserResult;
+  parse(content: string, filePath: string, options?: ParserOptions): ParserResult;
 }
 
 // Registry of available parsers
@@ -27,7 +32,7 @@ export function getParserForFile(filePath: string): FileParser | null {
 }
 
 /** Parse a single file using the appropriate parser */
-export function parseFile(content: string, filePath: string): ParserResult {
+export function parseFile(content: string, filePath: string, options?: ParserOptions): ParserResult {
   const parser = getParserForFile(filePath);
   if (!parser) {
     // Return a generic file node with no dependencies
@@ -44,7 +49,7 @@ export function parseFile(content: string, filePath: string): ParserResult {
       edges: [],
     };
   }
-  return parser.parse(content, filePath);
+  return parser.parse(content, filePath, options);
 }
 
 /** Detect language from file path */

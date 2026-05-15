@@ -83,18 +83,20 @@ This keeps PLAN.md as the single source of truth for "what's done, what's next."
 - Skills: `project-context` (generic loader), `update-project-context` (local `.claude/memory/` instead of global path)
 - Build status: Both `tsc --noEmit` pass (0 errors)
 
-### Phase 2: Core Pipeline ⬅️ (Next — in priority order)
+### Phase 2: Core Pipeline ✅ (Complete)
 
-| # | Task | Key files |
-|---|------|-----------|
-| 1 | **TypeScript parser** — extract imports, classes, interfaces, functions via TS compiler API | `server/src/parsers/typescript.ts` |
-| 2 | **DropZone** — File System Access API to read dropped folders | `client/src/features/drop-zone/` |
-| 3 | **3D graph** — R3F canvas with sphere nodes, edges, OrbitControls | `client/src/features/graph-3d/` |
-| 4 | **2D graph** — D3 force simulation rendering | `client/src/features/graph-2d/` |
-| 5 | **Client → server wiring** — DropZone → POST /api/parse → render result (depends on 1-4) | `client/src/shared/api/`, `server/src/index.ts` |
-| 6 | **Testing setup** — vitest (client), jest (server) | Config files |
+All 6 tasks implemented, tested, and typechecked. Full end-to-end pipeline: drop a folder → server parses → graph renders in 3D/2D.
 
-### Phase 3: Visualization & Interaction
+| # | Task | Status | Key files |
+|---|------|--------|-----------|
+| 1 | **TypeScript parser** — TS Compiler API AST visitor: extracts imports, classes, interfaces, functions, variables, enums, type-aliases; tsconfig-aware resolution; re-export two-hop edges; graceful error handling | ✅ Done | `server/src/parsers/typescript.ts` |
+| 2 | **DropZone** — File System Access API (`showDirectoryPicker`), drag-and-drop with `webkitGetAsEntry`, recursive directory reader, fallback to `webkitdirectory` input, loading/error states | ✅ Done | `client/src/features/drop-zone/index.tsx` |
+| 3 | **3D graph** — R3F Canvas with sphere nodes (color/sized by kind), line edges (accessible/inaccessible), 3 layout modes (spherical/concentric/force-directed), auto-rotate OrbitControls | ✅ Done | `client/src/features/graph-3d/index.tsx` |
+| 4 | **2D graph** — D3 force simulation with circles (color by kind), labels on file nodes, zoom/pan, drag behavior, collision detection | ✅ Done | `client/src/features/graph-2d/index.tsx` |
+| 5 | **Client → server wiring** — DropZone collects files → `POST /api/parse` → `buildGraph()` + `analyzeGraph()` → render 3D/2D | ✅ Done | `client/src/shared/api/index.ts`, `server/src/index.ts` |
+| 6 | **Testing** — vitest configured, 27 tests across 6 fixture projects (imports, classes, re-exports, tsconfig aliases, enums, syntax errors, edge cases) | ✅ Done | `server/vitest.config.ts`, `server/src/parsers/__tests__/` |
+
+### Phase 3: Visualization & Interaction ⬅️ (Next)
 
 | # | Task | Description |
 |---|------|-------------|
@@ -139,18 +141,22 @@ This keeps PLAN.md as the single source of truth for "what's done, what's next."
 |-------|--------|
 | Client TypeScript | ✅ 0 errors (`tsc --noEmit`) |
 | Server TypeScript | ✅ 0 errors (`tsc --noEmit`) |
-| Client tests | ⏳ Not configured |
-| Server tests | ⏳ Not configured |
-| Dev server runs | ⏳ Not verified (no parser yet) |
+| Client tests | ⏳ Not configured (next: Phase 3) |
+| Server tests | ✅ 27/27 pass (`vitest`) |
+| Dev server runs | ✅ Server on :3001, Client on :5173 |
+| Health check | ✅ `GET /api/hello` → 200 `{"status":"ok"}` |
+| Smoke test | ✅ 4 PASS, 3 SKIP (no client tests yet) — report at `data/smoke_report.md` |
 
 ---
 
 ## Known Conditions
 
-- **Server stubs return empty data** — `/api/parse` and `/api/trace` endpoints return stubs until parsers are implemented
-- **No test suite yet** — scaffold phase; vitest/jest not configured
+- **Server `/api/parse`** — now wired to real parsers + builder + analyzer; accepts multipart form with `files` field
+- **Client tests not configured** — planned for Phase 3 alongside new feature tests
 - **Node.js 18+ required** — Vite 5 requires it
 - **`npm run dev` uses `concurrently`** — already installed as a dev dependency
+- **3D "force-directed" layout** — currently uses spherical fallback; true force simulation planned for Phase 3
+- **SearchPanel "zoom-to-node"** — click handler has TODO; to be wired in Phase 3
 
 ## How to Run
 

@@ -1,0 +1,268 @@
+KIMI SPECS FORMAT GUIDE
+=======================
+
+This document describes the standard format used in all .kimi_specs/week2/*.txt task files, all of this should be done before development even starts.
+
+
+1. FILE NAMING CONVENTION
+-------------------------
+ALL files are in their own week{week} folder, so create that if its not available.
+Pattern: t{week}_{task_number}_{description}.txt
+
+Examples:
+  t2_1_indicators.txt          → Week 2, Task 1, indicators module
+  t2_1_test_indicators.txt     → Week 2, Task 1, tests for indicators
+  t4_11_api.txt                → Week 4, Task 11, API module
+  t4_11_test_api.txt           → Week 4, Task 11, API tests
+  t7_12_smoke.txt              → Week 7, Task 12, enhance auto-generated smoke tests
+
+Special files:
+  ticker_timeout_health_ping.txt → Cross-week infrastructure task
+
+
+2. TASK TYPES
+-------------
+
+A. NEW MODULE (generate from scratch)
+   - Starts with: "Generate Python module <path> with..."
+   - Or: "Generate file <path>..."
+   - Lists functions/classes with signatures, behavior, and constraints
+   - Ends with: "Output ONLY the code. No fences. No prose."
+
+B. NEW TESTS (generate tests for a module)
+   - Starts with: "Generate pytest tests for <module_path>."
+   - Or: "Generate tests for <file_path>."
+   - Lists test functions/classes with exact inputs and assertions
+   - Ends with: "Output ONLY the code. No fences."
+
+C. UPDATE EXISTING FILE (modify existing code)
+   - Starts with: "Generate the COMPLETE updated file <path>."
+   - Contains: "--- EXISTING CONTENT (keep verbatim) ---" block
+   - Followed by: "Changes:" section describing exact modifications
+   - Ends with: "Output ONLY the complete file. No fences. No prose."
+
+D. UPDATE EXISTING FILE (without showing full existing content)
+   - Starts with: "Generate the COMPLETE updated file <path>."
+   - Contains: "--- EXISTING CONTENT (preserve) ---" with summary
+   - Followed by: "Changes:" section describing exact modifications
+   - Ends with: "Output ONLY the complete updated <filetype> file. No fences. No prose."
+
+E. MULTI-FILE UPDATE (multiple files in one task)
+   - Starts with: "Generate two new files:" or "Three file changes."
+   - Separates files with: "--- <filename> ---" or "=== FILE N: <path> ==="
+   - Ends with: "Output BOTH files..." or "Output ALL THREE files..."
+
+F. SMOKE TEST ENHANCEMENT (fill in auto-generated boilerplate)
+   - Context: `scripts/check-backend-coverage.py` and `scripts/check-frontend-coverage.js`
+     auto-generate placeholder smoke tests when new API modules or routes are detected.
+   - Task: "Enhance auto-generated smoke tests for <module/route>."
+   - Contains: Replace TODO placeholders in the generated file with real business-logic
+     assertions (e.g., start bot → verify running → stop bot → verify stopped).
+   - Ends with: "Output ONLY the complete updated file. No fences. No prose."
+
+G. CSS MODULE (frontend styles)
+   - Starts with: "Generate file <path> with minimal CSS module styles."
+   - Lists CSS classes with property descriptions
+   - Ends with: "Output ONLY the CSS. No fences. No prose."
+
+H. TYPES/API DEFINITIONS (TypeScript)
+   - Starts with: "Generate the COMPLETE updated file <path>."
+   - Contains: "--- EXISTING CONTENT (keep exactly) ---" block
+   - Appends new type definitions after existing content
+   - Ends with: "Output ONLY the complete file. No fences. No prose."
+
+
+3. COMMON STRUCTURE ELEMENTS
+----------------------------
+
+A. IMPORTS SECTION
+   ```
+   Imports:
+   import math
+   from decimal import Decimal
+   import pytest
+   ```
+
+B. CONTEXT SECTION (for complex tasks)
+   ```
+   Context:
+   - BrokerProtocol is in backend.brokers.base — async connect/close/...
+   - Models in backend.core.models: Candle, Order, Position
+   - Errors in backend.brokers.base: BrokerAuthError, ...
+   ```
+
+C. FUNCTION SPECIFICATION
+   ```
+   FUNCTION N: function_name(param: type) -> return_type
+   - Bullet describing behavior
+   - Bullet describing edge cases
+   - Formula or algorithm details
+   ```
+
+D. CLASS SPECIFICATION
+   ```
+   ClassName:
+   - Attribute: type — description
+   - Method: signature — description
+   ```
+
+E. CHANGES SECTION (for updates)
+   ```
+   Changes:
+   1. Add a new private async method `_name(...)`:
+      ```
+      async def _name(...) -> None:
+          ...
+      ```
+   2. Modify `method_name` to ...
+   3. In `run()`: insert ... AFTER ... and BEFORE ...
+   ```
+
+F. CONSTRAINTS SECTION
+   ```
+   Constraints:
+   - No docstrings.
+   - No __main__ block.
+   - snake_case names.
+   - Type hints on every parameter and return.
+   - Output ONLY the code. No fences.
+   - add meaningful comments in the implementation
+   ```
+
+
+4. OUTPUT DIRECTIVES
+--------------------
+
+Every task file ends with one of these output directives:
+
+  "Output ONLY the code. No fences. No prose."
+  "Output ONLY the complete file. No fences. No prose."
+  "Output ONLY the CSS. No fences. No prose."
+  "Output ONLY the markdown. No fences. No prose outside the document."
+  "Output ONLY the file content. No fences around the whole thing. No prose before or after."
+  "Output BOTH files concatenated: // === File1 === [content] // === File2 === [content]"
+  "Output the two files concatenated: // === types.ts === [content] // === api.ts === [content]"
+
+
+5. CODING CONVENTIONS ACROSS ALL TASKS
+--------------------------------------
+
+Python:
+  - Type hints on ALL parameters and returns
+  - snake_case for functions/variables
+  - PascalCase for classes
+  - No docstrings (unless explicitly requested)
+  - put coments when usefull (one-line per function)
+  - No __main__ blocks
+  - Use Decimal for financial values
+  - Use datetime with timezone-aware UTC
+  - Frozen dataclasses with slots=True where appropriate
+
+TypeScript/React:
+  - Named exports only (no default export)
+  - Type hints everywhere
+  - No comments
+  - CSS modules with className={styles.xxx}
+  - data-testid attributes for testability
+  - Functional components with hooks
+
+Tests:
+  - pytest for Python, vitest for TypeScript
+  - Test classes grouped by functionality (TestRsi, TestEma, etc.)
+  - Type-hint test methods as -> None
+  - Unit tests: no fixtures, no conftest changes — pure test functions with inline mocks
+  - Smoke tests: use fixtures from `tests/smoke/conftest.py` (http_get, http_post, etc.)
+    — these are NOT generated from specs; they are auto-generated by coverage checkers
+    and enhanced by hand when business-logic assertions are needed
+  - Use math.isnan for NaN checks
+  - Use pytest.approx for float equality
+  - Mock external dependencies (fetch, WebSocket, etc.)
+
+
+6. SPECIAL MARKERS
+------------------
+
+  "--- EXISTING CONTENT (keep verbatim) ---"
+  "--- EXISTING CONTENT (keep exactly) ---"
+  "--- EXISTING CONTENT (preserve) ---"
+  "--- END EXISTING CONTENT ---"
+  "--- END EXISTING ---"
+  "--- TYPES ---"
+  "--- DEFAULT FORM VALUES ---"
+  "--- COMPONENT ---"
+  "=== FILE N: <path> ==="
+  "===FILE: <path>==="
+  "// === FileName ==="
+
+
+7. VERIFICATION (Automated Smoke Suite)
+----------------------------------------
+
+The project uses a unified automated smoke test orchestrator (`run_smoke.py`).
+After all week tasks are implemented, the final task is always:
+
+  **Run `@run-smoke`** from the project root.
+
+What happens:
+  - Backend + frontend services start automatically.
+  - Missing smoke test boilerplate is auto-generated for new API modules and routes.
+  - Full test suite runs: pytest (unit + smoke + integration), Playwright e2e, vitest.
+  - Results are written to `data/smoke_report.json` and `data/smoke_report.md`.
+
+How to verify:
+  1. Open `data/smoke_report.md` after the run.
+  2. Check the "Failed Tests" section. If any exist, fix the code or fill in
+     TODO placeholders in auto-generated smoke tests (e.g. `tests/smoke/manual/test_smoke_<module>.py`).
+  3. Re-run until `run_smoke.py` exits 0.
+
+If all suites pass: Week N done. Commit and ship.
+
+No manual markdown checklists are created. The report IS the checklist.
+
+
+8. WEEK PROGRESSION PATTERNS
+----------------------------
+
+Week 2 (Foundation):
+  - Core indicators (RSI, EMA)
+  - Backtest engine basics
+  - Frontend pages (Backtest, Dashboard)
+  - API endpoints
+  - Types and models
+
+Week 3 (Strategies):
+  - Pattern detection (candlestick, Wyckoff)
+  - Strategy registry
+  - Confluence engine
+  - Walk-forward analysis
+
+Week 4 (Live Trading):
+  - Broker integrations (Binance, OANDA)
+  - Paper trading
+  - Trade store
+  - Risk management
+  - WebSocket dashboard
+
+Week 5 (Polish):
+  - Error handling and logging
+  - Watchlist management
+  - Daily P&L tracking
+  - Notifier system
+
+Week 6 (Production):
+  - Candle backfill
+  - Equity events
+  - Live equity chart
+  - Paper balance tracking
+
+Week 7 (Scale):
+  - Multi-bot support
+  - Namespacing
+  - Exit reasons
+  - Idempotent operations
+  - Schema migrations
+
+Week 8+ (Advanced):
+  - Strategies API
+  - Credentials management
+  - Additional broker support
